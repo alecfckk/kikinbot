@@ -3,8 +3,12 @@ import json
 import base64
 import logging
 import tempfile
+import hashlib
+import hmac
 from datetime import datetime
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiohttp import web
+import asyncio
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
     filters, ContextTypes, ConversationHandler
@@ -23,6 +27,8 @@ logger = logging.getLogger(__name__)
 TELEGRAM_TOKEN    = os.environ["TELEGRAM_TOKEN"]
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 OPENAI_API_KEY    = os.environ["OPENAI_API_KEY"]
+MINI_APP_URL      = os.environ.get("MINI_APP_URL", "https://alecfckk.github.io/kikinbot/")
+PORT              = int(os.environ.get("PORT", 8080))
 client        = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -35,6 +41,37 @@ user_histories:  dict[int, list[dict]] = {}
 user_reminders:  dict[int, list[str]]  = {}
 patient_records: dict[int, list[dict]] = {}
 appointments:    dict[int, list[dict]] = {}   # agenda de citas
+
+# ── Persistencia en disco (JSON) ──────────────────────────────────────────────
+DATA_FILE = os.environ.get("DATA_FILE", "odontobot_data.json")
+
+def _int_keys(d: dict) -> dict:
+    return {int(k): v for k, v in d.items()}
+
+def load_data():
+    global user_reminders, patient_records, appointments
+    if not os.path.exists(DATA_FILE):
+        return
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        user_reminders  = _int_keys(data.get("reminders", {}))
+        patient_records = _int_keys(data.get("patients", {}))
+        appointments    = _int_keys(data.get("appointments", {}))
+        logger.info(f"✅ Datos cargados desde {DATA_FILE}")
+    except Exception as e:
+        logger.error(f"Error cargando datos: {e}")
+
+def save_data():
+    try:
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump({
+                "reminders":    {str(k): v for k, v in user_reminders.items()},
+                "patients":     {str(k): v for k, v in patient_records.items()},
+                "appointments": {str(k): v for k, v in appointments.items()},
+            }, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"Error guardando datos: {e}")
 
 # ── Fármacos odontológicos con dosis ─────────────────────────────────────────
 FARMACOS = {
@@ -135,6 +172,7 @@ def main_keyboard():
         [KeyboardButton("📅 Mi horario"),      KeyboardButton("⏰ Recordatorio")],
         [KeyboardButton("🗂️ Mis pacientes"),  KeyboardButton("🗓️ Agenda")],
         [KeyboardButton("💊 Calcular dosis"),  KeyboardButton("🔄 Nueva consulta")],
+        [KeyboardButton("📱 Abrir App", web_app=WebAppInfo(url=MINI_APP_URL))],
     ]
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
@@ -182,7 +220,7 @@ def whatsapp_link(telefono: str, nombre: str, fecha: str, nota: str = "") -> str
         numero = "52" + numero
     procedimiento = f" para *{nota}*" if nota else ""
     mensaje = (
-        f"Hola {nombre}, lo saluda el Dr. Alejandro Gordillo. "
+        f"Hola {nombre}, le saluda la clínica odontológica de la UPGCH. "
         f"Le recordamos su cita{procedimiento} el día *{fecha}*. "
         f"Por favor confírmenos su asistencia. ¡Muchas gracias! 🦷"
     )
@@ -377,41 +415,62 @@ async def appt_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text == "❌ Cancelar":
         await update.message.reply_text("Cancelado.", reply_markup=main_keyboard())
         return ConversationHandler.END
-    uid  = update.effective_user.id
     nota = update.message.text.strip()
     if nota.lower() == "ninguna":
         nota = ""
+    context.user_data["appt_nota"] = nota
+    await update.message.reply_text(
+        "📞 ¿Cuál es el *teléfono del paciente* para el recordatorio de WhatsApp?\n"
+        "Escribe `ninguno` para omitir.",
+        parse_mode="Markdown",
+        reply_markup=cancel_keyboard()
+    )
+    return APPT_PHONE
+
+async def appt_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ Cancelar":
+        await update.message.reply_text("Cancelado.", reply_markup=main_keyboard())
+        return ConversationHandler.END
+    uid      = update.effective_user.id
+    telefono = update.message.text.strip()
+    if telefono.lower() == "ninguno":
+        telefono = ""
+    nota = context.user_data.get("appt_nota", "")
 
     cita = {
-        "paciente":  context.user_data.get("appt_patient", "?"),
+        "paciente":   context.user_data.get("appt_patient", "?"),
         "expediente": context.user_data.get("appt_exp", "N/D"),
-        "fecha":     context.user_data.get("appt_date", "?"),
-        "nota":      nota,
-        "creada":    datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "fecha":      context.user_data.get("appt_date", "?"),
+        "nota":       nota,
+        "telefono":   telefono,
+        "creada":     datetime.now().strftime("%d/%m/%Y %H:%M"),
     }
 
     if uid not in appointments:
         appointments[uid] = []
     appointments[uid].append(cita)
 
-    # También agrega recordatorio
     if uid not in user_reminders:
         user_reminders[uid] = []
     user_reminders[uid].append(
         f"[{datetime.now().strftime('%d/%m %H:%M')}] 🗓️ Cita: {cita['paciente']} — {cita['fecha']}"
         + (f" — {nota}" if nota else "")
     )
+    save_data()
 
-    await update.message.reply_text(
+    msg = (
         f"✅ *Cita agendada*\n\n"
         f"👤 {cita['paciente']} (Exp: {cita['expediente']})\n"
         f"📅 {cita['fecha']}\n"
         + (f"📝 {nota}\n" if nota else "")
         + f"\n⏰ Recordatorio guardado automáticamente.\n"
-        f"Usa /agenda para ver todas tus citas.",
-        parse_mode="Markdown",
-        reply_markup=main_keyboard()
+        f"Usa /agenda para ver todas tus citas."
     )
+    if telefono:
+        wa_link = whatsapp_link(telefono, cita["paciente"], cita["fecha"], nota)
+        msg += f"\n\n📲 [Recordatorio WhatsApp]({wa_link})"
+
+    await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=main_keyboard())
     return ConversationHandler.END
 
 async def cancel_conv(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -446,6 +505,7 @@ async def delete_appointment(update: Update, context: ContextTypes.DEFAULT_TYPE)
     try:
         idx     = int(context.args[0]) - 1
         removed = citas.pop(idx)
+        save_data()
         await update.message.reply_text(
             f"🗑️ Cita de *{removed['paciente']}* ({removed['fecha']}) eliminada.",
             parse_mode="Markdown",
@@ -462,7 +522,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_histories[user.id] = []
     await update.message.reply_text(
         f"¡Hola, {user.first_name}! 👋🦷\n\n"
-        "Soy tu asistente odontológico.\n\n"
+        "Soy tu asistente odontológico v3.\n\n"
         "📸 Envíame la foto de una *carpeta clínica* → ficha + plan de tratamiento\n"
         "💊 Botón *Calcular dosis* → dosis por peso del paciente\n"
         "🗓️ Botón *Agenda* → programa citas por paciente\n\n"
@@ -489,6 +549,7 @@ async def show_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def clear_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_reminders[update.effective_user.id] = []
+    save_data()
     await update.message.reply_text("🗑️ Recordatorios borrados.", reply_markup=main_keyboard())
 
 async def show_patients(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -522,6 +583,7 @@ async def delete_patient(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         idx     = int(context.args[0]) - 1
         removed = patient_records[uid].pop(idx)
+        save_data()
         await update.message.reply_text(
             f"🗑️ Paciente *{removed.get('nombre','?')}* eliminado.",
             parse_mode="Markdown", reply_markup=main_keyboard()
@@ -563,6 +625,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         patient_records[uid] = []
     patient_records[uid].append(patient)
     patient_idx = len(patient_records[uid])
+    save_data()
 
     await update.message.reply_text(format_patient_card(patient), parse_mode="Markdown")
 
@@ -664,6 +727,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if uid not in user_reminders:
             user_reminders[uid] = []
         user_reminders[uid].append(f"[{datetime.now().strftime('%d/%m %H:%M')}] {text}")
+        save_data()
         await update.message.reply_text(
             f"✅ Guardado. Tienes {len(user_reminders[uid])} recordatorio(s).\n/recordatorios para verlos.",
             reply_markup=main_keyboard()
@@ -673,8 +737,84 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply = await ai_reply(uid, text)
     await update.message.reply_text(reply, reply_markup=main_keyboard())
 
+async def open_app(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🦷 Abrir OdontoApp", web_app=WebAppInfo(url=MINI_APP_URL))
+    ]])
+    await update.message.reply_text("📱 Toca para abrir tu app clínica:", reply_markup=keyboard)
+
+# ── API HTTP para Mini App (datos reales) ─────────────────────────────────────
+def verify_telegram_data(init_data: str) -> int | None:
+    """Verifica initData de Telegram WebApp y retorna el user_id si es válido."""
+    try:
+        from urllib.parse import parse_qs, unquote
+        parsed = parse_qs(unquote(init_data))
+        hash_val = parsed.pop("hash", [None])[0]
+        if not hash_val:
+            return None
+        data_check = "\n".join(
+            f"{k}={v[0]}" for k, v in sorted(parsed.items())
+        )
+        secret = hmac.new(b"WebAppData", TELEGRAM_TOKEN.encode(), hashlib.sha256).digest()
+        expected = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, hash_val):
+            return None
+        import json as _json
+        user = _json.loads(parsed.get("user", ["{}"])[0])
+        return user.get("id")
+    except Exception as e:
+        logger.error(f"verify_telegram_data error: {e}")
+        return None
+
+async def api_data(request: web.Request) -> web.Response:
+    """GET /api/data?init_data=... → devuelve pacientes y citas del usuario."""
+    headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+    }
+    if request.method == "OPTIONS":
+        return web.Response(headers=headers)
+
+    init_data = request.rel_url.query.get("init_data", "")
+    uid = verify_telegram_data(init_data) if init_data else None
+
+    # En desarrollo sin initData, permite query param ?uid=
+    if not uid and request.rel_url.query.get("uid"):
+        uid = int(request.rel_url.query.get("uid"))
+
+    if not uid:
+        return web.Response(
+            status=401,
+            text=json.dumps({"error": "Unauthorized"}),
+            content_type="application/json",
+            headers=headers
+        )
+
+    data = {
+        "patients":     patient_records.get(uid, []),
+        "appointments": appointments.get(uid, []),
+        "reminders":    user_reminders.get(uid, []),
+    }
+    return web.Response(
+        text=json.dumps(data, ensure_ascii=False),
+        content_type="application/json",
+        headers=headers
+    )
+
+async def start_api_server():
+    app_web = web.Application()
+    app_web.router.add_get("/api/data", api_data)
+    app_web.router.add_options("/api/data", api_data)
+    app_web.router.add_get("/health", lambda r: web.Response(text="ok"))
+    runner = web.AppRunner(app_web)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
+    await site.start()
+    logger.info(f"🌐 API server en puerto {PORT}")
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
+    load_data()
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
     # ConversationHandler — Calculadora de dosis
@@ -700,6 +840,7 @@ def main():
             APPT_PATIENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, appt_patient)],
             APPT_DATE:    [MessageHandler(filters.TEXT & ~filters.COMMAND, appt_date)],
             APPT_NOTE:    [MessageHandler(filters.TEXT & ~filters.COMMAND, appt_note)],
+            APPT_PHONE:   [MessageHandler(filters.TEXT & ~filters.COMMAND, appt_phone)],
         },
         fallbacks=[CommandHandler("cancelar", cancel_conv)],
     )
@@ -708,6 +849,7 @@ def main():
     app.add_handler(appt_conv)
 
     app.add_handler(CommandHandler("start",                  start))
+    app.add_handler(CommandHandler("app",                    open_app))
     app.add_handler(CommandHandler("horario",                show_schedule))
     app.add_handler(CommandHandler("recordatorios",          show_reminders))
     app.add_handler(CommandHandler("borrar_recordatorios",   clear_reminders))
@@ -723,6 +865,11 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logger.info("🦷 OdontoBot v3 iniciado...")
+
+    async def post_init(application):
+        await start_api_server()
+
+    app.post_init = post_init
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
