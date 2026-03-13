@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Dosis · UPGCH</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg:      #050509;
+  --s1:      #0d0d14;
+  --s2:      #161622;
+  --border:  #252535;
+  --g:       #00ff88;       /* green accent */
+  --g2:      rgba(0,255,136,.12);
+  --r:       #ff4d6d;
+  --y:       #ffc857;
+  --b:       #4d9fff;
+  --text:    #eeeeff;
+  --muted:   #6668a0;
+  --font-display: 'Syne', sans-serif;
+  --font-mono:    'IBM Plex Mono', monospace;
+  --font-body:    'Lato', sans-serif;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html { font-size:16px; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ── HEADER ── */
+.header {
+  padding: 20px 20px 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.header-title {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.02em;
+}
+.header-title span {
+  color: var(--g);
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  opacity: .8;
+}
+.header-badge {
+  background: var(--g2);
+  border: 1px solid rgba(0,255,136,.25);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--g);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── WEIGHT SECTION ── */
+.weight-section {
+  padding: 24px 20px 0;
+}
+.label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+.label-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+.weight-display {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.weight-num {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+  letter-spacing: -.03em;
+  transition: color .2s;
+}
+.weight-unit {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* Slider */
+.slider-wrap { position: relative; margin-bottom: 8px; }
+input[type=range] {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--s2);
+  -webkit-appearance: none;
+  outline: none;
+  border: none;
+  cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: var(--g);
+  box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px rgba(0,255,136,.3);
+  transition: box-shadow .15s;
+}
+input[type=range]:active::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--bg), 0 0 0 8px rgba(0,255,136,.2);
+}
+.slider-range {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+.slider-range span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* Manual input */
+.weight-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.weight-input {
+  flex: 1;
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--text);
+  outline: none;
+  transition: border-color .2s;
+  -webkit-appearance: none;
+}
+.weight-input:focus { border-color: rgba(0,255,136,.4); }
+.weight-input::placeholder { color: var(--muted); }
+.weight-set-btn {
+  background: var(--g2);
+  border: 1px solid rgba(0,255,136,.3);
+  border-radius: 12px;
+  padding: 12px 18px;
+  color: var(--g);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+  white-space: nowrap;
+}
+.weight-set-btn:active { background: rgba(0,255,136,.2); }
+
+/* ── DRUG SELECTOR ── */
+.section { padding: 24px 20px 0; }
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  margin-bottom: 12px;
+}
+
+.drug-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.drug-btn {
+  background: var(--s1);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: all .15s;
+  position: relative;
+  overflow: hidden;
+}
+.drug-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--g2);
+  opacity: 0;
+  transition: opacity .15s;
+}
+.drug-btn.active { border-color: var(--g); }
+.drug-btn.active::before { opacity: 1; }
+.drug-btn:active { transform: scale(.97); }
+.drug-cat {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  margin-bottom: 4px;
+  position: relative;
+}
+.drug-name {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  position: relative;
+  line-height: 1.2;
+}
+.drug-btn.active .drug-name { color: var(--g); }
+.drug-dose-hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+  position: relative;
+}
+.drug-btn.active .drug-dose-hint { color: rgba(0,255,136,.6); }
+
+/* ── RESULT PANEL ── */
+.result-panel {
+  margin: 24px 20px 0;
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  overflow: hidden;
+  transition: border-color .3s;
+}
+.result-panel.warning { border-color: rgba(255,196,87,.4); }
+
+.result-top {
+  padding: 20px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.result-main {
+  font-family: var(--font-display);
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.04em;
+  color: var(--g);
+  transition: color .3s;
+}
+.result-panel.warning .result-main { color: var(--y); }
+.result-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  margin-bottom: 6px;
+}
+.result-drug-name {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.result-formula {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-bottom: 1px solid var(--border);
+}
+.result-cell {
+  padding: 14px 16px;
+  border-right: 1px solid var(--border);
+}
+.result-cell:last-child { border-right: none; }
+.rc-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 5px;
+}
+.rc-val {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.rc-val.highlight { color: var(--b); }
+
+/* Warning bar */
+.warning-bar {
+  display: none;
+  padding: 12px 16px;
+  background: rgba(255,196,87,.08);
+  border-top: 1px solid rgba(255,196,87,.2);
+  font-size: 12px;
+  color: var(--y);
+  font-family: var(--font-mono);
+  line-height: 1.5;
+}
+.result-panel.warning .warning-bar { display: block; }
+
+/* Carpule display */
+.carpule-row {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+  display: none;
+}
+.carpule-row.visible { display: flex; }
+.carpules-visual {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.carpule-icon {
+  width: 28px; height: 44px;
+  border-radius: 5px 5px 8px 8px;
+  border: 1.5px solid rgba(0,255,136,.4);
+  background: rgba(0,255,136,.08);
+  position: relative;
+  transition: all .3s;
+}
+.carpule-icon.full { background: rgba(0,255,136,.2); border-color: var(--g); }
+.carpule-icon.half { background: linear-gradient(to top, rgba(0,255,136,.2) 50%, transparent 50%); border-color: rgba(0,255,136,.5); }
+.carpule-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+  flex-shrink: 0;
+}
+.carpule-num {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--g);
+  display: block;
+}
+
+/* ── DRUG INFO ── */
+.info-section {
+  margin: 16px 20px 0;
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  overflow: hidden;
+}
+.info-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+.info-tab {
+  flex: 1;
+  padding: 12px;
+  background: none;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  cursor: pointer;
+  transition: all .15s;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.info-tab.active { color: var(--g); border-bottom-color: var(--g); }
+.info-pane { display: none; padding: 16px; }
+.info-pane.active { display: block; }
+.info-item {
+  margin-bottom: 14px;
+}
+.info-item:last-child { margin-bottom: 0; }
+.info-key {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  margin-bottom: 4px;
+}
+.info-val {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.55;
+}
+.info-val.danger { color: var(--r); }
+.info-val.ok { color: var(--g); }
+
+/* Tags */
+.tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+}
+.tag-g { background: rgba(0,255,136,.1); color: var(--g); border: 1px solid rgba(0,255,136,.2); }
+.tag-r { background: rgba(255,77,109,.1); color: var(--r); border: 1px solid rgba(255,77,109,.2); }
+.tag-b { background: rgba(77,159,255,.1); color: var(--b); border: 1px solid rgba(77,159,255,.2); }
+
+/* Bottom space */
+.bottom-pad { height: 32px; }
+
+/* ── ANIMATIONS ── */
+@keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.04); } 100% { transform: scale(1); } }
+.popping { animation: pop .2s ease; }
+
+@keyframes fadeSlide { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform:none; } }
+.fade-in { animation: fadeSlide .3s ease; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">
+    <span>UPGCH · Odontología</span>
+    Dosificador
+  </div>
+  <div class="header-badge" id="session-badge">💊 Calculadora</div>
+</div>
+
+<!-- WEIGHT -->
+<div class="weight-section">
+  <div class="label-row">
+    <span class="label-text">Peso del paciente</span>
+    <div class="weight-display">
+      <span class="weight-num" id="weight-display">65</span>
+      <span class="weight-unit">kg</span>
+    </div>
+  </div>
+  <div class="slider-wrap">
+    <input type="range" id="weight-slider" min="5" max="150" value="65" oninput="onSliderChange(this.value)">
+  </div>
+  <div class="slider-range">
+    <span>5 kg</span>
+    <span>Pediátrico &lt;30 · Adulto 30–100 · Obeso &gt;100</span>
+    <span>150 kg</span>
+  </div>
+  <div class="weight-input-row">
+    <input type="number" class="weight-input" id="weight-manual" placeholder="Escribe el peso exacto…" min="5" max="300" inputmode="decimal">
+    <button class="weight-set-btn" onclick="setManualWeight()">↵ Aplicar</button>
+  </div>
+</div>
+
+<!-- DRUG SELECTOR -->
+<div class="section">
+  <div class="section-label">Selecciona el fármaco</div>
+  <div class="drug-grid" id="drug-grid"></div>
+</div>
+
+<!-- RESULT -->
+<div class="result-panel" id="result-panel">
+  <div class="result-top">
+    <div>
+      <div class="result-label">Dosis calculada</div>
+      <div class="result-drug-name" id="res-drug-name">—</div>
+      <div class="result-formula" id="res-formula">—</div>
+    </div>
+    <div style="text-align:right">
+      <div class="result-label" style="text-align:right">Total</div>
+      <div class="result-main" id="res-dose">—</div>
+      <div style="font-family:var(--font-mono);font-size:12px;color:var(--muted)">mg</div>
+    </div>
+  </div>
+
+  <div class="carpule-row" id="carpule-row">
+    <div class="carpule-label">
+      <span class="carpule-num" id="carpule-num">—</span>
+      carpules
+    </div>
+    <div class="carpules-visual" id="carpules-visual"></div>
+  </div>
+
+  <div class="result-grid">
+    <div class="result-cell">
+      <div class="rc-label">Dosis/kg</div>
+      <div class="rc-val" id="rc-rate">—</div>
+    </div>
+    <div class="result-cell">
+      <div class="rc-label">Dosis máx.</div>
+      <div class="rc-val" id="rc-max">—</div>
+    </div>
+    <div class="result-cell">
+      <div class="rc-label">Intervalo</div>
+      <div class="rc-val highlight" id="rc-interval">—</div>
+    </div>
+  </div>
+
+  <div class="result-cell" style="border:none;padding:14px 16px;border-top:1px solid var(--border)">
+    <div class="rc-label">Presentación</div>
+    <div class="rc-val" id="rc-presentation">—</div>
+  </div>
+
+  <div class="warning-bar" id="warning-bar"></div>
+</div>
+
+<!-- INFO TABS -->
+<div class="info-section">
+  <div class="info-tabs">
+    <button class="info-tab active" onclick="switchTab('mec',this)">Mecanismo</button>
+    <button class="info-tab" onclick="switchTab('ind',this)">Indicaciones</button>
+    <button class="info-tab" onclick="switchTab('ci',this)">Contraindicaciones</button>
+  </div>
+  <div class="info-pane active" id="pane-mec">
+    <div class="info-item">
+      <div class="info-key">Mecanismo de acción</div>
+      <div class="info-val" id="inf-mec">—</div>
+    </div>
+    <div class="info-item">
+      <div class="info-key">Clasificación</div>
+      <div class="info-val" id="inf-class">—</div>
+    </div>
+  </div>
+  <div class="info-pane" id="pane-ind">
+    <div class="info-item">
+      <div class="info-key">Indicaciones principales</div>
+      <div class="tag-row" id="inf-ind"></div>
+    </div>
+    <div class="info-item" style="margin-top:14px">
+      <div class="info-key">Observaciones clínicas</div>
+      <div class="info-val" id="inf-obs">—</div>
+    </div>
+  </div>
+  <div class="info-pane" id="pane-ci">
+    <div class="info-item">
+      <div class="info-key">Contraindicaciones</div>
+      <div class="tag-row" id="inf-ci"></div>
+    </div>
+    <div class="info-item" style="margin-top:14px">
+      <div class="info-key">Precauciones especiales</div>
+      <div class="info-val danger" id="inf-prec">—</div>
+    </div>
+  </div>
+</div>
+
+<div class="bottom-pad"></div>
+
+<script>
+// ── Telegram init ─────────────────────────────────────────────────────────────
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor('#050509'); tg.setBackgroundColor('#050509'); }
+
+// ── Drug database ─────────────────────────────────────────────────────────────
+const DRUGS = [
+  {
+    key: 'lidocaina', label: 'Lidocaína', cat: 'Anestésico',
+    dosis: 4.4, max: 300, carpule: 36, presentacion: '36 mg/carpule · 1.8 mL',
+    intervalo: 'Única / procedimiento',
+    mecanismo: 'Bloqueo reversible de canales de Na⁺ voltaje-dependientes en la membrana neuronal, impidiendo la despolarización y la propagación del impulso nervioso.',
+    clasificacion: 'Amida · Categoría B embarazo',
+    indicaciones: ['Anestesia infiltrativa', 'Bloqueo troncular', 'Procedimientos de rutina', 'Exodoncias simples'],
+    observaciones: 'Anestésico de referencia en odontología. Con vasoconstrictor (epinefrina 1:80,000–1:100,000) prolonga efecto hasta 60-90 min. Sin vasoconstrictor: 15-30 min.',
+    contraindicaciones: ['Alergia a amidas', 'Bradicardia severa', 'Bloqueo AV de 2°-3° grado', 'Porfiria'],
+    precauciones: 'Usar con precaución en ICC, enfermedad hepática severa, epilepsia no controlada. Dosis tóxica produce síntomas del SNC (convulsiones) y cardiovasculares.',
+  },
+  {
+    key: 'articaina', label: 'Articaína', cat: 'Anestésico',
+    dosis: 7.0, max: 500, carpule: 72, presentacion: '72 mg/carpule · 1.8 mL',
+    intervalo: 'Única / procedimiento',
+    mecanismo: 'Bloqueo de canales de Na⁺. Única amida con anillo tiofeno que le confiere alta liposolubilidad y mayor difusión tisular.',
+    clasificacion: 'Amida + tiofen · Categoría C embarazo',
+    indicaciones: ['Tejidos inflamados', 'Anestesia infiltrativa mandibular', 'Pulpotomías', 'Cirugías prolongadas'],
+    observaciones: 'Mayor difusión tisular que lidocaína. Útil en infecciones activas donde la lidocaína falla. Con epinefrina 1:100,000 o 1:200,000.',
+    contraindicaciones: ['Alergia a amidas', 'Methemoglobinemia congénita', 'Deficiencia de G6PD', 'Menores de 4 años'],
+    precauciones: 'Riesgo de parestesia persistente ligeramente mayor al de lidocaína (especialmente nervio lingual e inferior). Evitar en pacientes con anemia.',
+  },
+  {
+    key: 'mepivacaina', label: 'Mepivacaína', cat: 'Anestésico',
+    dosis: 4.4, max: 300, carpule: 54, presentacion: '54 mg/carpule · 1.8 mL',
+    intervalo: 'Única / procedimiento',
+    mecanismo: 'Bloqueo de canales de Na⁺. Tiene efecto vasoconstrictor intrínseco leve, por lo que puede usarse sin epinefrina.',
+    clasificacion: 'Amida · Categoría C embarazo',
+    indicaciones: ['Contraindicación a vasoconstrictores', 'Hipertensión severa', 'Procedimientos cortos', 'Arritmias cardíacas'],
+    observaciones: 'Al 3% sin vasoconstrictor: duración ~20-40 min (pulpar) y ~2-3h (tejidos blandos). Al 2% con levonordefrina: efectividad similar a lidocaína con epinefrina.',
+    contraindicaciones: ['Alergia a amidas', 'Gestación (evitar 1°-3° trimestre)', 'Insuficiencia hepática grave'],
+    precauciones: 'Aunque no requiere vasoconstrictor, las soluciones al 3% tienen mayor cantidad de mg por carpule. Calcular bien la dosis total.',
+  },
+  {
+    key: 'amoxicilina', label: 'Amoxicilina', cat: 'Antibiótico',
+    dosis: 25, max: 500, carpule: null, presentacion: '500 mg/cápsula c/8h × 7 días',
+    intervalo: 'c/8h × 7 días',
+    mecanismo: 'Inhibe la síntesis de pared bacteriana uniéndose a las PBPs (Penicillin-Binding Proteins), impidiendo la transpeptidación del peptidoglicano.',
+    clasificacion: 'β-lactámico aminopenicilina · Categoría B embarazo',
+    indicaciones: ['Infecciones odontogénicas leves-moderadas', 'Periodontitis aguda', 'Profilaxis endocarditis', 'Celulitis facial'],
+    observaciones: 'Primera línea en infecciones odontogénicas. Para abscesos graves combinar con metronidazol 500 mg c/8h. Espectro: streptococos, H. influenzae, E. coli.',
+    contraindicaciones: ['Alergia a penicilinas (10% reactividad cruzada con cefalosporinas)', 'Mononucleosis infecciosa (rash severo)', 'Leucemia linfocítica'],
+    precauciones: 'Suspender si aparece rash. En insuficiencia renal reducir dosis. Puede reducir eficacia de anticonceptivos orales (informar a la paciente).',
+  },
+  {
+    key: 'ibuprofeno', label: 'Ibuprofeno', cat: 'AINE',
+    dosis: 10, max: 400, carpule: null, presentacion: '400 mg/tableta c/8h',
+    intervalo: 'c/6-8h · máx 5 días',
+    mecanismo: 'Inhibición no selectiva de COX-1 y COX-2 → ↓ síntesis de prostaglandinas, tromboxanos y prostaciclinas. Efecto analgésico, antiinflamatorio y antipirético.',
+    clasificacion: 'AINE no selectivo · Categoría B/D embarazo',
+    indicaciones: ['Dolor postoperatorio moderado', 'Inflamación postexodoncia', 'Trismo', 'Pulpitis reversible'],
+    observaciones: 'Mejor AINE para dolor dental. Combinación ibuprofeno 400mg + paracetamol 500mg es más eficaz que opioides para dolor dental postop. Tomar con alimentos.',
+    contraindicaciones: ['Úlcera péptica activa', 'Insuficiencia renal crónica', 'Embarazo ≥28 sem', 'Alergia a AAS/AINEs', 'ICC descompensada'],
+    precauciones: 'Riesgo cardiovascular aumentado con uso prolongado. Puede elevar presión arterial. Monitorear en adultos mayores. Interacción con anticoagulantes (warfarina).',
+  },
+  {
+    key: 'paracetamol', label: 'Paracetamol', cat: 'Analgésico',
+    dosis: 15, max: 1000, carpule: null, presentacion: '500-1000 mg c/6-8h',
+    intervalo: 'c/6-8h · máx 4 g/día',
+    mecanismo: 'Mecanismo exacto no del todo aclarado. Inhibición central de COX-3, modulación de receptores cannabinoides endógenos y del sistema serotoninérgico espinal.',
+    clasificacion: 'Analgésico-antipirético · Categoría B embarazo (seguro)',
+    indicaciones: ['Dolor leve-moderado', 'Embarazo (1° línea)', 'Contraindicación a AINEs', 'Combinación con ibuprofeno'],
+    observaciones: 'Muy seguro en embarazo y lactancia. Sin efecto antiinflamatorio clínicamente significativo. En combinación con ibuprofeno potencia el efecto analgésico sin sumar toxicidades.',
+    contraindicaciones: ['Hepatopatía severa (Child-Pugh C)', 'Alcoholismo activo (>3 copas/día)', 'Deficiencia de G6PD severa'],
+    precauciones: 'Dosis máxima 4 g/día en adultos sanos, 2 g/día en hepatopatía. El principal riesgo es sobredosis (NAC como antídoto). Presente en muchos medicamentos combinados — evitar duplicar.',
+  },
+  {
+    key: 'dexametasona', label: 'Dexametasona', cat: 'Corticoide',
+    dosis: 0.15, max: 8, carpule: null, presentacion: '8 mg/2 mL · dosis única',
+    intervalo: 'Dosis única preoperatoria',
+    mecanismo: 'Corticoesteroide sintético. Inhibe fosfolipasa A2 → ↓ síntesis de AA → ↓ prostaglandinas y leucotrienos. Potencia antiinflamatoria 25× mayor que cortisol.',
+    clasificacion: 'Glucocorticoide sintético · Categoría C embarazo',
+    indicaciones: ['Edema postquirúrgico severo', 'Trismo agudo', 'Reacción alérgica', 'Cirugías complejas (3° molares)'],
+    observaciones: 'Administrar IM 30-60 min antes de la cirugía o IV en el transoperatorio. Reduce significativamente edema y trismo en 3° molares impactados. Efecto dura 36-54h.',
+    contraindicaciones: ['Infección activa no controlada', 'DM tipo 1 descompensada', 'Úlcera péptica activa', 'Varicela activa'],
+    precauciones: 'Una dosis única raramente causa efectos sistémicos. En DM puede elevar glucosa 24-48h. Evitar si el paciente tiene infección activa — puede enmascarar empeoramiento.',
+  },
+  {
+    key: 'clindamicina', label: 'Clindamicina', cat: 'Antibiótico',
+    dosis: 10, max: 300, carpule: null, presentacion: '300 mg/cápsula c/8h × 7 días',
+    intervalo: 'c/8h × 7 días',
+    mecanismo: 'Se une a la subunidad 50S del ribosoma bacteriano inhibiendo la síntesis proteica. Bacteriostático en dosis normales, bactericida en altas concentraciones.',
+    clasificacion: 'Lincosamida · Categoría B embarazo',
+    indicaciones: ['Alergia a penicilinas', 'Anaerobios', 'Infecciones graves de cabeza/cuello', 'Profilaxis endocarditis (alternativa)'],
+    observaciones: 'Excelente cobertura para anaerobios (Fusobacterium, Prevotella, Porphyromonas). Alternativa de elección en alérgicos a penicilinas. Buena penetración ósea.',
+    contraindicaciones: ['Colitis pseudomembranosa previa', 'Antecedente de diarrea por C. difficile', 'Enteritis regional'],
+    precauciones: 'Riesgo real de colitis por C. difficile (diarrea severa/sanguinolenta → suspender y tratar con metronidazol oral). Advertir al paciente de este efecto adverso.',
+  },
+];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let weight = 65;
+let activeDrug = 0;
+let activeTab = 'mec';
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+function init() {
+  buildDrugGrid();
+  update();
+}
+
+// ── Drug grid ─────────────────────────────────────────────────────────────────
+function buildDrugGrid() {
+  const grid = document.getElementById('drug-grid');
+  grid.innerHTML = DRUGS.map((d, i) => `
+    <button class="drug-btn ${i === 0 ? 'active' : ''}" onclick="selectDrug(${i})" id="drug-btn-${i}">
+      <div class="drug-cat">${d.cat}</div>
+      <div class="drug-name">${d.label}</div>
+      <div class="drug-dose-hint">${d.dosis} mg/kg · máx ${d.max} mg</div>
+    </button>
+  `).join('');
+}
+
+function selectDrug(idx) {
+  document.getElementById('drug-btn-' + activeDrug).classList.remove('active');
+  activeDrug = idx;
+  document.getElementById('drug-btn-' + activeDrug).classList.add('active');
+  update();
+}
+
+// ── Weight controls ───────────────────────────────────────────────────────────
+function onSliderChange(val) {
+  weight = parseFloat(val);
+  document.getElementById('weight-display').textContent = weight;
+  pulseWeight();
+  update();
+}
+
+function setManualWeight() {
+  const input = document.getElementById('weight-manual');
+  const val = parseFloat(input.value);
+  if (!val || val < 1 || val > 300) {
+    input.style.borderColor = 'rgba(255,77,109,.5)';
+    setTimeout(() => input.style.borderColor = '', 1200);
+    return;
+  }
+  weight = val;
+  const sliderVal = Math.min(Math.max(val, 5), 150);
+  document.getElementById('weight-slider').value = sliderVal;
+  document.getElementById('weight-display').textContent = weight;
+  input.value = '';
+  input.blur();
+  pulseWeight();
+  update();
+}
+
+document.getElementById('weight-manual').addEventListener('keydown', e => {
+  if (e.key === 'Enter') setManualWeight();
+});
+
+function pulseWeight() {
+  const el = document.getElementById('weight-display');
+  el.classList.remove('popping');
+  void el.offsetWidth;
+  el.classList.add('popping');
+}
+
+// ── Main update ───────────────────────────────────────────────────────────────
+function update() {
+  const d = DRUGS[activeDrug];
+  const calculated = Math.round(d.dosis * weight * 10) / 10;
+  const final = Math.min(calculated, d.max);
+  const exceeded = calculated > d.max;
+
+  // Main result
+  const doseEl = document.getElementById('res-dose');
+  doseEl.textContent = final;
+  doseEl.classList.remove('popping');
+  void doseEl.offsetWidth;
+  doseEl.classList.add('popping');
+
+  document.getElementById('res-drug-name').textContent = d.label;
+  document.getElementById('res-formula').textContent = `${d.dosis} mg/kg × ${weight} kg = ${calculated} mg`;
+  document.getElementById('rc-rate').textContent = d.dosis + ' mg/kg';
+  document.getElementById('rc-max').textContent = d.max + ' mg';
+  document.getElementById('rc-interval').textContent = d.intervalo;
+  document.getElementById('rc-presentation').textContent = d.presentacion;
+
+  const panel = document.getElementById('result-panel');
+  panel.classList.toggle('warning', exceeded);
+
+  const warnBar = document.getElementById('warning-bar');
+  if (exceeded) {
+    warnBar.textContent = `⚠ Calculado: ${calculated} mg > máximo (${d.max} mg). Se aplica dosis máxima.`;
+  }
+
+  // Carpules
+  const carpuleRow = document.getElementById('carpule-row');
+  if (d.carpule) {
+    carpuleRow.classList.add('visible');
+    const numCarpules = final / d.carpule;
+    const full = Math.floor(numCarpules);
+    const frac = numCarpules - full;
+    document.getElementById('carpule-num').textContent = Math.round(numCarpules * 10) / 10;
+
+    let vis = '';
+    for (let i = 0; i < full; i++) vis += '<div class="carpule-icon full"></div>';
+    if (frac >= 0.1) vis += '<div class="carpule-icon half"></div>';
+    const empty = Math.max(0, Math.ceil(numCarpules) - full - (frac >= 0.1 ? 1 : 0));
+    for (let i = 0; i < empty; i++) vis += '<div class="carpule-icon"></div>';
+    document.getElementById('carpules-visual').innerHTML = vis;
+  } else {
+    carpuleRow.classList.remove('visible');
+  }
+
+  // Drug info
+  document.getElementById('inf-mec').textContent = d.mecanismo;
+  document.getElementById('inf-class').textContent = d.clasificacion;
+  document.getElementById('inf-ind').innerHTML = d.indicaciones.map(i => `<span class="tag tag-g">${i}</span>`).join('');
+  document.getElementById('inf-obs').textContent = d.observaciones;
+  document.getElementById('inf-ci').innerHTML = d.contraindicaciones.map(c => `<span class="tag tag-r">${c}</span>`).join('');
+  document.getElementById('inf-prec').textContent = d.precauciones;
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.info-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.info-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('pane-' + name).classList.add('active');
+}
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
