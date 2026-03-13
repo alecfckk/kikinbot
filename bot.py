@@ -4,7 +4,7 @@ import base64
 import logging
 import tempfile
 from datetime import datetime
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
     filters, ContextTypes, ConversationHandler
@@ -28,7 +28,7 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ── Estados de conversación ───────────────────────────────────────────────────
 DOSE_WEIGHT, DOSE_DRUG = range(2)
-APPT_PATIENT, APPT_DATE, APPT_NOTE = range(3, 6)
+APPT_PATIENT, APPT_DATE, APPT_NOTE, APPT_PHONE = range(3, 7)
 
 # ── Almacenamiento en memoria ─────────────────────────────────────────────────
 user_histories:  dict[int, list[dict]] = {}
@@ -50,30 +50,63 @@ FARMACOS = {
 }
 
 # ── System prompt ─────────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """Eres un asistente especializado en Odontología para estudiantes de último semestre de la Universidad Pablo Guardado Chávez (UPGCH).
+SYSTEM_PROMPT = """Eres un asistente clínico odontológico de alto nivel, diseñado para estudiantes de último semestre de la Universidad Pablo Guardado Chávez (UPGCH), Tuxtla Gutiérrez, Chiapas.
 
-Perfil del estudiante: 8° semestre, grupo A2 Mixto Salud, ciclo F-J 2526.
-Materias: Administración, Ortodoncia II, Clínica de Cirugía Bucal, Clínica Integral de Adultos II, Clínica de Odontopediatría, Seminario de Tesis II.
+PERFIL DEL ESTUDIANTE:
+- 8° semestre, grupo A2 Mixto Salud, ciclo F-J 2526
+- Materias: Administración, Ortodoncia II, Clínica de Cirugía Bucal, Clínica Integral de Adultos II, Clínica de Odontopediatría, Seminario de Tesis II
+- Nivel: próximo a titularse, con experiencia clínica real
 
-Capacidades:
-1. 🦷 DUDAS CLÍNICAS — protocolos, diagnósticos, farmacología, técnicas quirúrgicas
-2. 📝 TESIS — redacción APA 7, metodología, marco teórico
-3. 📚 ADMINISTRACIÓN — gestión de consultorio, aspectos legales
-4. 🗂️ FICHAS DE PACIENTE — genera ficha completa y plan de tratamiento inicial
-5. 💊 CALCULADORA DE DOSIS — cálculo por peso para anestésicos y medicamentos
-6. 🗓️ AGENDA — gestión de citas por paciente
+CAPACIDADES CLÍNICAS DETALLADAS:
+1. DUDAS CLÍNICAS
+   - Protocolos paso a paso (cirugía, endodoncia, periodoncia, ortodoncia, odontopediatría)
+   - Diagnósticos diferenciales con criterios clínicos y radiográficos
+   - Farmacología: mecanismo de acción, dosis, interacciones, contraindicaciones
+   - Manejo de complicaciones trans y postoperatorias
+   - Interpretación radiográfica y criterios de éxito
 
-Reglas:
-- Responde SIEMPRE en español
-- Sé conciso pero completo
-- Usa emojis con moderación
-- Para fármacos incluye dosis y contraindicaciones
-- Si no sabes algo con certeza, dilo y sugiere fuentes confiables
+2. TESIS (Seminario de Tesis II)
+   - Redacción académica en APA 7ma edición
+   - Estructura IMRD completa
+   - Estadística descriptiva e inferencial aplicada a odontología
+   - Revisión crítica de literatura indexada (PubMed, Scopus, Lilacs)
+
+3. FICHAS DE PACIENTE
+   - Plan de tratamiento por fases: sistémica, higiénica, correctiva, mantenimiento
+   - Consideraciones médicas por edad y comorbilidades
+   - Secuencia de tratamiento por prioridad clínica
+
+4. FARMACOLOGÍA
+   - Anestésicos locales: dosis exacta por peso, carpules, técnica
+   - Antibióticos, AINEs, corticosteroides
+   - Interacciones medicamentosas frecuentes
+
+5. ADMINISTRACIÓN DE CONSULTORIO
+   - Gestión clínica, aspectos legales, consentimiento informado
+
+ESTILO DE RESPUESTA:
+- Responde SIEMPRE en español mexicano
+- Sé clínico, preciso y directo — como un especialista consultado por un colega
+- Para protocolos: usa pasos numerados
+- Para fármacos: incluye SIEMPRE dosis, vía, intervalo y contraindicaciones
+- Para diagnósticos: menciona criterios diferenciales
+- Cita fuentes cuando sea relevante (ADA, AAE, AAP, guías clínicas)
+- Si algo requiere criterio clínico presencial, menciónalo
 """
 
-VISION_PROMPT = """Eres un asistente odontológico. Se te envía la foto de una carpeta clínica médico-odontológica.
+VISION_PROMPT = """Eres un experto en lectura de documentos clínicos odontológicos de México.
+Se te envía la foto de una carpeta clínica médico-odontológica de la UPGCH (Universidad Pablo Guardado Chávez).
 
-Extrae TODOS los datos visibles y devuelve ÚNICAMENTE un JSON con esta estructura exacta (sin texto adicional, sin markdown):
+INSTRUCCIONES CRÍTICAS:
+1. Analiza TODA la imagen con máximo detalle, incluyendo texto manuscrito, impreso y etiquetas
+2. Infiere datos parcialmente visibles usando contexto (ej: si ves "17/09/5_" probablemente es 17/09/55)
+3. Para texto manuscrito difícil, intenta leerlo aunque no estés 100% seguro — marca con (?) si hay duda
+4. El número de expediente suele estar en una etiqueta lateral o esquina superior
+5. La especialidad puede estar marcada con una palomita o subrayada en la lista impresa
+6. Nombres en México suelen tener 2 nombres y 2 apellidos
+7. El campo "alumno" corresponde al estudiante que atiende al paciente
+
+Devuelve ÚNICAMENTE un JSON válido con esta estructura (sin texto adicional, sin markdown, sin explicaciones):
 {
   "nombre": "",
   "fecha_nacimiento": "",
@@ -88,10 +121,11 @@ Extrae TODOS los datos visibles y devuelve ÚNICAMENTE un JSON con esta estructu
   "fecha_apertura": "",
   "especialidad": "",
   "numero_expediente": "",
-  "alerta": ""
+  "alerta": "",
+  "notas_adicionales": ""
 }
 
-Si un campo no es legible o no aparece, déjalo como cadena vacía "".
+IMPORTANTE: Prefiere un dato aproximado con (?) a dejar el campo vacío. Solo deja vacío si el campo realmente no existe en el documento.
 """
 
 # ── Teclado principal ─────────────────────────────────────────────────────────
@@ -140,6 +174,21 @@ _Ciclo F-J 2526_
 """
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+def whatsapp_link(telefono: str, nombre: str, fecha: str, nota: str = "") -> str:
+    """Genera enlace directo a WhatsApp con mensaje pregenerado."""
+    # Limpiar número: solo dígitos, agregar 52 si es México
+    numero = "".join(filter(str.isdigit, telefono))
+    if len(numero) == 10:
+        numero = "52" + numero
+    procedimiento = f" para *{nota}*" if nota else ""
+    mensaje = (
+        f"Hola {nombre}, le saluda la clínica odontológica de la UPGCH. "
+        f"Le recordamos su cita{procedimiento} el día *{fecha}*. "
+        f"Por favor confírmenos su asistencia. ¡Muchas gracias! 🦷"
+    )
+    from urllib.parse import quote
+    return f"https://wa.me/{numero}?text={quote(mensaje)}"
+
 def format_patient_card(p: dict) -> str:
     lines = [
         "🗂️ *FICHA DE PACIENTE*",
@@ -149,6 +198,7 @@ def format_patient_card(p: dict) -> str:
         f"🎂 Nacimiento: {p.get('fecha_nacimiento') or 'N/D'}  |  Edad: {p.get('edad') or 'N/D'}",
         f"⚧ Sexo: {p.get('sexo') or 'N/D'}  |  Estado civil: {p.get('estado_civil') or 'N/D'}",
         f"🏠 Domicilio: {p.get('domicilio') or 'N/D'}",
+        f"📞 Teléfono: {p.get('telefono') or 'N/D'}",
         f"💼 Ocupación: {p.get('ocupacion') or 'N/D'}",
         "",
         f"🎓 Alumno: {p.get('alumno') or 'N/D'}",
@@ -159,6 +209,8 @@ def format_patient_card(p: dict) -> str:
         lines.append(f"🦷 Especialidad: {p['especialidad']}")
     if p.get("alerta"):
         lines.append(f"⚠️ *ALERTA:* {p['alerta']}")
+    if p.get("notas_adicionales"):
+        lines.append(f"📌 Notas: {p['notas_adicionales']}")
     lines.append(f"\n🕐 Registrado: {p.get('_registrado', 'N/D')}")
     return "\n".join(lines)
 
@@ -195,7 +247,7 @@ async def ai_reply(uid: int, user_content) -> str:
         user_histories[uid] = user_histories[uid][-20:]
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1024,
             system=SYSTEM_PROMPT,
             messages=user_histories[uid]
@@ -489,7 +541,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         vision_resp = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1024,
             messages=[{"role": "user", "content": [
                 {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": img_b64}},
@@ -516,9 +568,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     plan_prompt = (
-        f"Paciente:\n{json.dumps(patient, ensure_ascii=False, indent=2)}\n\n"
-        "Genera un plan de tratamiento inicial sugerido basado en edad, sexo y especialidad. "
-        "Sé conciso, usa lista."
+        f"Paciente registrado:\n{json.dumps(patient, ensure_ascii=False, indent=2)}\n\n"
+        "Como clínico de último semestre de la UPGCH, genera un plan de tratamiento inicial estructurado por FASES:\n\n"
+        "FASE 1 - SISTÉMICA: consideraciones médicas según edad, sexo y alertas del paciente\n"
+        "FASE 2 - HIGIÉNICA: control de placa, motivación, instrucciones de higiene\n"
+        "FASE 3 - CORRECTIVA: procedimientos clínicos sugeridos según la especialidad indicada\n"
+        "FASE 4 - MANTENIMIENTO: frecuencia de citas de control\n\n"
+        "Incluye consideraciones farmacológicas relevantes si aplica. "
+        "Si la especialidad es Cirugía, incluye criterios quirúrgicos. "
+        "Si es Odontopediatría, incluye técnica de manejo de conducta. "
+        "Sé clínico y específico."
     )
     plan = await ai_reply(uid, plan_prompt)
     await update.message.reply_text(f"📋 *Plan de tratamiento sugerido:*\n\n{plan}", parse_mode="Markdown")
