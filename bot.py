@@ -182,7 +182,7 @@ def whatsapp_link(telefono: str, nombre: str, fecha: str, nota: str = "") -> str
         numero = "52" + numero
     procedimiento = f" para *{nota}*" if nota else ""
     mensaje = (
-        f"Hola {nombre}, le saluda la clínica odontológica de la UPGCH. "
+        f"Hola {nombre}, lo saluda el Dr. Alejandro Gordillo. "
         f"Le recordamos su cita{procedimiento} el día *{fecha}*. "
         f"Por favor confírmenos su asistencia. ¡Muchas gracias! 🦷"
     )
@@ -462,7 +462,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_histories[user.id] = []
     await update.message.reply_text(
         f"¡Hola, {user.first_name}! 👋🦷\n\n"
-        "Soy tu asistente odontológico v3.\n\n"
+        "Soy tu asistente odontológico.\n\n"
         "📸 Envíame la foto de una *carpeta clínica* → ficha + plan de tratamiento\n"
         "💊 Botón *Calcular dosis* → dosis por peso del paciente\n"
         "🗓️ Botón *Agenda* → programa citas por paciente\n\n"
