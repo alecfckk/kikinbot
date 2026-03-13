@@ -44,13 +44,13 @@ patient_records: dict[int, list[dict]] = {}
 appointments:    dict[int, list[dict]] = {}
 
 # ── PostgreSQL ────────────────────────────────────────────────────────────────
-import psycopg2
-import psycopg2.extras
+import asyncpg
+import asyncpg.extras
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 def get_conn():
-    return psycopg2.connect(DATABASE_URL, sslmode="require")
+    return asyncpg.connect(DATABASE_URL, sslmode="require")
 
 def init_db():
     """Crea las tablas si no existen."""
