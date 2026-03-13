@@ -28,6 +28,7 @@ TELEGRAM_TOKEN    = os.environ["TELEGRAM_TOKEN"]
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 OPENAI_API_KEY    = os.environ["OPENAI_API_KEY"]
 MINI_APP_URL      = os.environ.get("MINI_APP_URL", "https://alecfckk.github.io/kikinbot/")
+BOT_API_URL       = os.environ.get("BOT_API_URL", "")   # ej: https://tu-app.railway.app
 PORT              = int(os.environ.get("PORT", 8080))
 client        = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
@@ -166,13 +167,20 @@ IMPORTANTE: Prefiere un dato aproximado con (?) a dejar el campo vacío. Solo de
 """
 
 # ── Teclado principal ─────────────────────────────────────────────────────────
+def _app_url() -> str:
+    """Mini App URL con la URL del bot como parámetro para que la app pueda sincronizar."""
+    if BOT_API_URL:
+        from urllib.parse import urlencode
+        return f"{MINI_APP_URL}?{urlencode({'api': BOT_API_URL})}"
+    return MINI_APP_URL
+
 def main_keyboard():
     buttons = [
         [KeyboardButton("🦷 Duda clínica"),   KeyboardButton("📝 Tesis")],
         [KeyboardButton("📅 Mi horario"),      KeyboardButton("⏰ Recordatorio")],
         [KeyboardButton("🗂️ Mis pacientes"),  KeyboardButton("🗓️ Agenda")],
         [KeyboardButton("💊 Calcular dosis"),  KeyboardButton("🔄 Nueva consulta")],
-        [KeyboardButton("📱 Abrir App", web_app=WebAppInfo(url=MINI_APP_URL))],
+        [KeyboardButton("📱 Abrir App", web_app=WebAppInfo(url=_app_url()))],
     ]
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
@@ -739,7 +747,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def open_app(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🦷 Abrir OdontoApp", web_app=WebAppInfo(url=MINI_APP_URL))
+        InlineKeyboardButton("🦷 Abrir OdontoApp", web_app=WebAppInfo(url=_app_url()))
     ]])
     await update.message.reply_text("📱 Toca para abrir tu app clínica:", reply_markup=keyboard)
 
@@ -803,8 +811,9 @@ async def api_data(request: web.Request) -> web.Response:
 
 async def start_api_server():
     app_web = web.Application()
-    app_web.router.add_get("/api/data", api_data)
+    app_web.router.add_get("/api/data",     api_data)
     app_web.router.add_options("/api/data", api_data)
+    app_web.router.add_get("/miniapp/data", api_data)   # alias para compatibilidad
     app_web.router.add_get("/health", lambda r: web.Response(text="ok"))
     runner = web.AppRunner(app_web)
     await runner.setup()
