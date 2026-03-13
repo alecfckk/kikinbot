@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>kikin — Clínica UPGCH</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f;
+  --surface: #13131a;
+  --surface2: #1c1c28;
+  --border: #2a2a3d;
+  --accent: #00e5a0;
+  --accent2: #7c6af7;
+  --accent3: #ff6b6b;
+  --accent4: #ffd93d;
+  --text: #f0f0ff;
+  --text2: #8888aa;
+  --tooth-healthy: #00e5a0;
+  --tooth-caries: #ff6b6b;
+  --tooth-treated: #7c6af7;
+  --tooth-missing: #444466;
+  --tooth-default: #2a2a3d;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* NAV */
+.nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 4px;
+  background: none;
+  border: none;
+  color: var(--text2);
+  font-size: 9px;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: color .2s;
+}
+.nav-btn.active { color: var(--accent); }
+.nav-btn svg { width: 22px; height: 22px; }
+
+/* PAGES */
+.page { display: none; padding: 16px 16px 90px; animation: fadeIn .25s ease; }
+.page.active { display: block; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+
+/* HEADER */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.page-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+}
+.page-title span { color: var(--accent); }
+
+/* CARDS */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.card-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text2);
+}
+
+/* BADGES */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.badge-green  { background: rgba(0,229,160,.15); color: var(--accent); }
+.badge-purple { background: rgba(124,106,247,.15); color: var(--accent2); }
+.badge-red    { background: rgba(255,107,107,.15); color: var(--accent3); }
+
+/* STAT CHIPS */
+.stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 16px; }
+.stat-chip {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 10px;
+  text-align: center;
+}
+.stat-num {
+  font-family: 'Space Mono', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+.stat-label { font-size: 10px; color: var(--text2); margin-top: 4px; }
+
+/* PATIENT LIST */
+.patient-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.patient-item:last-child { border-bottom: none; }
+.patient-item:active { opacity: .7; }
+.patient-avatar {
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Space Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.patient-info { flex: 1; min-width: 0; }
+.patient-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.patient-meta { font-size: 11px; color: var(--text2); margin-top: 2px; }
+.patient-arrow { color: var(--text2); flex-shrink: 0; }
+
+/* EMPTY */
+.empty { text-align: center; padding: 40px 20px; color: var(--text2); }
+.empty-icon { font-size: 40px; margin-bottom: 12px; }
+.empty-text { font-size: 14px; }
+
+/* ODONTOGRAM */
+.odonto-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text2); }
+.legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+.odonto-arch {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 10px;
+  margin-bottom: 10px;
+}
+.arch-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--text2);
+  text-align: center;
+  margin-bottom: 10px;
+}
+.teeth-row {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 2px;
+}
+.teeth-row-temp {
+  grid-template-columns: repeat(10, 1fr);
+}
+.tooth {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+}
+.tooth-body {
+  width: 100%;
+  aspect-ratio: 1 / 1.1;
+  border-radius: 4px 4px 7px 7px;
+  background: var(--tooth-default);
+  border: 1.5px solid var(--border);
+  transition: all .15s;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tooth-body:active { transform: scale(.88); }
+.tooth-body.healthy { background: rgba(0,229,160,.2); border-color: var(--tooth-healthy); box-shadow: 0 0 6px rgba(0,229,160,.3); }
+.tooth-body.caries  { background: rgba(255,107,107,.2); border-color: var(--tooth-caries); box-shadow: 0 0 6px rgba(255,107,107,.3); }
+.tooth-body.treated { background: rgba(124,106,247,.2); border-color: var(--tooth-treated); box-shadow: 0 0 6px rgba(124,106,247,.3); }
+.tooth-body.missing { background: var(--tooth-missing); border-color: var(--tooth-missing); opacity: .4; }
+@keyframes toothPop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(.72); }
+  70%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.tooth-body.tapping { animation: toothPop .25s ease forwards; }
+.tooth-num {
+  font-family: 'Space Mono', monospace;
+  font-size: 6px;
+  color: var(--text2);
+  line-height: 1;
+}
+
+/* TOOTH MODAL */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.7);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  display: none;
+  align-items: flex-end;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px 24px 0 0;
+  width: 100%;
+  padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
+  animation: slideUp .25s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: none; } }
+.modal-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  text-align: center;
+}
+.modal-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.modal-opt {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1.5px solid var(--border);
+  background: var(--surface2);
+  text-align: center;
+  cursor: pointer;
+  transition: all .15s;
+  font-size: 13px;
+  font-weight: 600;
+}
+.modal-opt:active { transform: scale(.96); }
+.modal-opt.opt-healthy { border-color: var(--tooth-healthy); color: var(--tooth-healthy); }
+.modal-opt.opt-caries  { border-color: var(--tooth-caries); color: var(--tooth-caries); }
+.modal-opt.opt-treated { border-color: var(--tooth-treated); color: var(--tooth-treated); }
+.modal-opt.opt-missing { border-color: var(--text2); color: var(--text2); }
+.modal-cancel {
+  width: 100%;
+  margin-top: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  border: none;
+  background: var(--surface2);
+  color: var(--text2);
+  font-size: 14px;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+}
+
+/* CALENDAR */
+.cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.cal-month { font-family: 'Space Mono', monospace; font-size: 15px; font-weight: 700; }
+.cal-nav-btn {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7,1fr);
+  gap: 4px;
+  margin-bottom: 16px;
+}
+.cal-day-label { text-align: center; font-size: 10px; font-weight: 700; color: var(--text2); padding: 4px 0; text-transform: uppercase; }
+.cal-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: 13px;
+  cursor: pointer;
+  position: relative;
+  transition: background .15s;
+}
+.cal-day:active { opacity: .7; }
+.cal-day.other-month { color: var(--text2); opacity: .3; }
+.cal-day.today { background: rgba(0,229,160,.15); color: var(--accent); font-weight: 700; }
+.cal-day.has-appt::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--accent2);
+}
+.cal-day.selected { background: var(--accent); color: var(--bg); font-weight: 700; }
+
+.appt-list { display: flex; flex-direction: column; gap: 10px; }
+.appt-item { display: flex; gap: 12px; align-items: flex-start; background: var(--surface2); border: 1px solid var(--border); border-radius: 14px; padding: 12px; }
+.appt-time { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--accent); min-width: 45px; padding-top: 2px; }
+.appt-info { flex: 1; }
+.appt-name { font-size: 14px; font-weight: 600; }
+.appt-note { font-size: 11px; color: var(--text2); margin-top: 2px; }
+.appt-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent2); margin-top: 5px; flex-shrink: 0; }
+
+/* DOSE CALCULATOR */
+.drug-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+  scrollbar-width: none;
+}
+.drug-tabs::-webkit-scrollbar { display: none; }
+.drug-tab {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: none;
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.drug-tab.active { background: rgba(0,229,160,.15); border-color: var(--accent); color: var(--accent); }
+
+.slider-section { margin-bottom: 20px; }
+.slider-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.slider-label-text { font-size: 13px; color: var(--text2); }
+.slider-value { font-family: 'Space Mono', monospace; font-size: 16px; font-weight: 700; color: var(--accent); }
+input[type=range] {
+  width: 100%; height: 6px; border-radius: 3px;
+  outline: none; border: none;
+  background: var(--surface2);
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.weight-input-row { display: flex; gap: 8px; margin-top: 12px; }
+.weight-input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-family: 'Space Mono', monospace;
+  font-size: 15px;
+  color: var(--text);
+  outline: none;
+  transition: border-color .2s;
+}
+.weight-input:focus { border-color: rgba(0,229,160,.4); }
+.weight-input::placeholder { color: var(--text2); font-size: 12px; }
+.weight-set-btn {
+  background: rgba(0,229,160,.1);
+  border: 1px solid rgba(0,229,160,.3);
+  border-radius: 12px;
+  padding: 10px 16px;
+  color: var(--accent);
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.weight-set-btn:active { background: rgba(0,229,160,.2); }
+
+.dose-result {
+  background: linear-gradient(135deg, rgba(0,229,160,.08), rgba(124,106,247,.08));
+  border: 1px solid rgba(0,229,160,.25);
+  border-radius: 16px;
+  padding: 20px;
+  text-align: center;
+  transition: border-color .3s;
+}
+.dose-result.warning { border-color: rgba(255,196,87,.5); }
+.dose-main {
+  font-family: 'Space Mono', monospace;
+  font-size: 52px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+  letter-spacing: -.03em;
+  transition: color .3s;
+}
+.dose-result.warning .dose-main { color: var(--accent4); }
+.dose-unit { font-size: 13px; color: var(--text2); margin: 6px 0 16px; }
+.dose-details { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; text-align: left; }
+.dose-detail-item { background: rgba(255,255,255,.04); border-radius: 10px; padding: 10px 12px; }
+.dose-detail-label { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 3px; }
+.dose-detail-val { font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 600; color: var(--text); }
+.dose-warning {
+  background: rgba(255,196,87,.1);
+  border: 1px solid rgba(255,196,87,.3);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--accent4);
+  text-align: left;
+  margin-top: 8px;
+}
+
+/* Carpule visual */
+.carpule-section { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.carpules-visual { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; }
+.carpule-icon {
+  width: 22px; height: 36px;
+  border-radius: 4px 4px 6px 6px;
+  border: 1.5px solid rgba(0,229,160,.3);
+  background: rgba(0,229,160,.06);
+}
+.carpule-icon.full { background: rgba(0,229,160,.2); border-color: var(--accent); }
+.carpule-icon.half { background: linear-gradient(to top, rgba(0,229,160,.2) 50%, transparent 50%); border-color: rgba(0,229,160,.5); }
+.carpule-label { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--text2); text-align: right; flex-shrink: 0; }
+.carpule-num { font-size: 20px; font-weight: 700; color: var(--accent); display: block; }
+
+/* Drug info tabs */
+.info-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+.info-tab {
+  flex: 1;
+  padding: 10px 8px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  cursor: pointer;
+  transition: all .15s;
+}
+.info-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.info-pane { display: none; font-size: 13px; color: var(--text2); line-height: 1.6; }
+.info-pane.active { display: block; }
+.info-key { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--text2); margin-bottom: 5px; margin-top: 12px; }
+.info-key:first-child { margin-top: 0; }
+.info-val { color: var(--text); }
+.info-val.danger { color: var(--accent3); }
+.tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { padding: 3px 9px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+.tag-g { background: rgba(0,229,160,.1); color: var(--accent); border: 1px solid rgba(0,229,160,.2); }
+.tag-r { background: rgba(255,107,107,.1); color: var(--accent3); border: 1px solid rgba(255,107,107,.2); }
+
+/* BTN */
+.btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text2);
+  font-size: 14px;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn:active { opacity: .7; }
+
+/* TOAST */
+#toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 13px;
+  z-index: 999;
+  transition: opacity .3s;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+}
+</style>
+</head>
+<body>
+
+<!-- ══ PAGE: PACIENTES ══ -->
+<div class="page active" id="page-patients">
+  <div class="page-header">
+    <div class="page-title">kik<span>in</span></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="badge badge-green" id="patients-count">0 px</div>
+      <button onclick="syncData()" style="background:rgba(0,229,160,.1);border:1px solid rgba(0,229,160,.25);border-radius:10px;padding:6px 12px;color:var(--accent);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer">🔄 Sync</button>
+      <button onclick="openSettings()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:6px 10px;color:var(--text2);font-size:14px;cursor:pointer">⚙️</button>
+    </div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-chip"><div class="stat-num" id="stat-total">0</div><div class="stat-label">Pacientes</div></div>
+    <div class="stat-chip"><div class="stat-num" id="stat-citas">0</div><div class="stat-label">Citas hoy</div></div>
+    <div class="stat-chip"><div class="stat-num" id="stat-week">0</div><div class="stat-label">Esta semana</div></div>
+  </div>
+  <div class="card">
+    <div id="patients-list"></div>
+  </div>
+</div>
+
+<!-- ══ PAGE: ODONTOGRAMA ══ -->
+<div class="page" id="page-odonto">
+  <div class="page-header">
+    <div class="page-title">Odonto<span>grama</span></div>
+    <div class="badge badge-purple" id="odonto-patient-badge">—</div>
+  </div>
+  <div class="card" style="padding:10px 8px">
+    <div id="patient-selector" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none"></div>
+  </div>
+  <div class="odonto-legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--tooth-default);border:1px solid var(--border)"></div>Sin datos</div>
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(0,229,160,.3);border:1px solid var(--tooth-healthy)"></div>Sano</div>
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(255,107,107,.3);border:1px solid var(--tooth-caries)"></div>Caries</div>
+    <div class="legend-item"><div class="legend-dot" style="background:rgba(124,106,247,.3);border:1px solid var(--tooth-treated)"></div>Tratado</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--tooth-missing)"></div>Ausente</div>
+  </div>
+  <div class="odonto-arch">
+    <div class="arch-label">Superior permanente</div>
+    <div class="teeth-row" id="upper-row"></div>
+  </div>
+  <div class="odonto-arch">
+    <div class="arch-label">Inferior permanente</div>
+    <div class="teeth-row" id="lower-row"></div>
+  </div>
+  <div class="odonto-arch">
+    <div class="arch-label">Temporal / Deciduo</div>
+    <div class="teeth-row teeth-row-temp" id="temp-row"></div>
+  </div>
+  <button class="btn" style="margin-top:8px" onclick="resetOdonto()">🔄 Limpiar odontograma</button>
+</div>
+
+<!-- ══ PAGE: AGENDA ══ -->
+<div class="page" id="page-agenda">
+  <div class="page-header">
+    <div class="page-title">A<span>genda</span></div>
+  </div>
+  <div class="card">
+    <div class="cal-header">
+      <button class="cal-nav-btn" onclick="changeMonth(-1)">‹</button>
+      <div class="cal-month" id="cal-month-label"></div>
+      <button class="cal-nav-btn" onclick="changeMonth(1)">›</button>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+  </div>
+  <div class="card-title" style="margin-bottom:10px;padding:0 4px" id="cal-day-label">Hoy</div>
+  <div id="appt-list-container">
+    <div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Sin citas para este día.</div></div>
+  </div>
+</div>
+
+<!-- ══ PAGE: DOSIS ══ -->
+<div class="page" id="page-dose">
+  <div class="page-header">
+    <div class="page-title">Dosis <span>Calculator</span></div>
+  </div>
+
+  <div class="drug-tabs" id="drug-tabs"></div>
+
+  <div class="card">
+    <div class="slider-section">
+      <div class="slider-label">
+        <span class="slider-label-text">⚖️ Peso del paciente</span>
+        <span class="slider-value" id="weight-val">65 kg</span>
+      </div>
+      <input type="range" id="weight-slider" min="5" max="150" value="65" oninput="onSliderChange(this.value)">
+      <div style="display:flex;justify-content:space-between;margin-top:4px">
+        <span style="font-size:10px;color:var(--text2)">5 kg</span>
+        <span style="font-size:10px;color:var(--text2)">150 kg</span>
+      </div>
+    </div>
+    <div class="weight-input-row">
+      <input type="number" class="weight-input" id="weight-manual" placeholder="Peso exacto en kg…" min="1" max="300" inputmode="decimal">
+      <button class="weight-set-btn" onclick="setManualWeight()">↵</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="dose-result" id="dose-result">
+      <div class="dose-main" id="dose-main">—</div>
+      <div class="dose-unit" id="dose-unit">mg calculados</div>
+      <div class="dose-details" id="dose-details"></div>
+      <div id="dose-warning" style="display:none" class="dose-warning"></div>
+    </div>
+    <div class="carpule-section" id="carpule-section" style="display:none">
+      <div class="carpule-label">
+        <span class="carpule-num" id="carpule-num">—</span>carpules
+      </div>
+      <div class="carpules-visual" id="carpules-visual"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="info-tabs">
+      <button class="info-tab active" onclick="switchInfoTab('mec',this)">Mecanismo</button>
+      <button class="info-tab" onclick="switchInfoTab('ind',this)">Indicaciones</button>
+      <button class="info-tab" onclick="switchInfoTab('ci',this)">Contraindicaciones</button>
+    </div>
+    <div class="info-pane active" id="pane-mec">
+      <div class="info-key">Mecanismo de acción</div>
+      <div class="info-val" id="inf-mec">—</div>
+      <div class="info-key">Clasificación</div>
+      <div class="info-val" id="inf-class">—</div>
+    </div>
+    <div class="info-pane" id="pane-ind">
+      <div class="info-key">Indicaciones</div>
+      <div class="tag-row" id="inf-ind"></div>
+      <div class="info-key">Observaciones</div>
+      <div class="info-val" id="inf-obs">—</div>
+    </div>
+    <div class="info-pane" id="pane-ci">
+      <div class="info-key">Contraindicaciones</div>
+      <div class="tag-row" id="inf-ci"></div>
+      <div class="info-key">Precauciones</div>
+      <div class="info-val danger" id="inf-prec">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav class="nav">
+  <button class="nav-btn active" onclick="showPage('patients',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    Pacientes
+  </button>
+  <button class="nav-btn" onclick="showPage('odonto',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C8 2 5 5 5 8c0 4 2 6 3 9 .5 1.5 1 3 2 3h4c1 0 1.5-1.5 2-3 1-3 3-5 3-9 0-3-3-6-7-6z"/></svg>
+    Odontograma
+  </button>
+  <button class="nav-btn" onclick="showPage('agenda',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    Agenda
+  </button>
+  <button class="nav-btn" onclick="showPage('dose',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.5 20H4a2 2 0 0 1-2-2V5c0-1.1.9-2 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H20a2 2 0 0 1 2 2v3"/><circle cx="18" cy="18" r="3"/><path d="M18 15v3l2 1"/></svg>
+    Dosis
+  </button>
+</nav>
+
+<!-- TOOTH MODAL -->
+<div class="modal-overlay" id="tooth-modal">
+  <div class="modal">
+    <div class="modal-title" id="modal-tooth-title">Diente #18</div>
+    <div class="modal-options">
+      <div class="modal-opt opt-healthy" onclick="setTooth('healthy')">✅ Sano</div>
+      <div class="modal-opt opt-caries"  onclick="setTooth('caries')">🔴 Caries</div>
+      <div class="modal-opt opt-treated" onclick="setTooth('treated')">💜 Tratado</div>
+      <div class="modal-opt opt-missing" onclick="setTooth('missing')">⬛ Ausente</div>
+    </div>
+    <button class="modal-cancel" onclick="closeModal()">Cancelar</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Telegram ──────────────────────────────────────────────────────────────────
+const tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand();
+  tg.setHeaderColor('#0a0a0f');
+  tg.setBackgroundColor('#0a0a0f');
+}
+
+// ── Storage ───────────────────────────────────────────────────────────────────
+const store = {
+  get: k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} },
+};
+
+function saveAll() {
+  store.set('kikin_patients', patients);
+  store.set('kikin_appointments', appointments);
+  store.set('kikin_odonto', odontogram);
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.style.opacity = '0', 2500);
+}
+
+// ── Bot API ───────────────────────────────────────────────────────────────────
+async function loadBotData() {
+  const api = store.get('kikin_bot_api');
+  if (!api) return false;
+  try {
+    const initData = tg?.initData || '';
+    const uid = tg?.initDataUnsafe?.user?.id || '';
+    const params = initData ? `init_data=${encodeURIComponent(initData)}` : `uid=${uid}`;
+    const res = await fetch(`${api}/api/data?${params}`);
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (data.patients?.length)     { patients     = data.patients;     store.set('kikin_patients', patients); }
+    if (data.appointments?.length) { appointments = data.appointments; store.set('kikin_appointments', appointments); }
+    showToast('✅ Sincronizado con el bot');
+    return true;
+  } catch(e) {
+    return false;
+  }
+}
+
+async function syncData() {
+  showToast('🔄 Sincronizando...');
+  const ok = await loadBotData();
+  if (ok) { renderPatients(); renderCalendar(); }
+  else showToast('⚠️ Sin conexión. Configura la URL en ⚙️');
+}
+
+function openSettings() {
+  const current = store.get('kikin_bot_api') || '';
+  if (tg && tg.showPopup) {
+    tg.showPopup({
+      title: '⚙️ Bot API URL',
+      message: `URL actual: ${current || 'no configurada'}\n\nEjemplo: https://web-production-8114e.up.railway.app`,
+      buttons: [
+        { id:'set',    type:'default',     text:'Cambiar URL' },
+        { id:'clear',  type:'destructive', text:'Limpiar' },
+        { id:'cancel', type:'cancel',      text:'Cerrar' },
+      ]
+    }, (id) => {
+      if (id === 'clear') { store.set('kikin_bot_api', ''); showToast('URL eliminada'); }
+      if (id === 'set')   promptApiUrl();
+    });
+  } else {
+    promptApiUrl();
+  }
+}
+
+function promptApiUrl() {
+  const url = prompt('URL del bot (Railway/Render):', store.get('kikin_bot_api') || '');
+  if (url !== null) { store.set('kikin_bot_api', url.trim()); showToast(url ? '✅ URL guardada' : 'URL eliminada'); }
+}
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+let patients = store.get('kikin_patients') || [
+  { id:1, nombre:'Manuel de Jesús Guzmán', exp:'CO/423/25', edad:'70', sexo:'M', especialidad:'Exodoncia', telefono:'9611234567', fecha:'13/03/2026' },
+  { id:2, nombre:'Natalia Rivera Osorio',  exp:'C0L-LIB 2125', edad:'—', sexo:'F', especialidad:'Historia Clínica', telefono:'', fecha:'13/03/2026' },
+];
+let appointments = store.get('kikin_appointments') || [
+  { paciente:'Manuel de Jesús Guzmán', fecha:'2026-03-13', hora:'15:30', nota:'Exodoncia pieza 18', exp:'CO/423/25' },
+  { paciente:'Natalia Rivera Osorio',  fecha:'2026-03-17', hora:'14:00', nota:'Historia clínica completa', exp:'C0L-LIB 2125' },
+];
+let odontogram = store.get('kikin_odonto') || {};
+let selectedPatientIdx = 0;
+let selectedToothId = null;
+
+// ── Nav ───────────────────────────────────────────────────────────────────────
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'agenda')   renderCalendar();
+  if (name === 'odonto')   renderOdonto();
+  if (name === 'patients') renderPatients();
+  if (name === 'dose')     renderDose();
+}
+
+// ── Patients ──────────────────────────────────────────────────────────────────
+function renderPatients() {
+  const list = document.getElementById('patients-list');
+  document.getElementById('patients-count').textContent = patients.length + ' px';
+  document.getElementById('stat-total').textContent = patients.length;
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayAppts = appointments.filter(a => a.fecha === todayStr);
+  document.getElementById('stat-citas').textContent = todayAppts.length;
+  const weekAppts = appointments.filter(a => {
+    const d = new Date(a.fecha), now = new Date();
+    const diff = (d - now) / 86400000;
+    return diff >= 0 && diff <= 7;
+  });
+  document.getElementById('stat-week').textContent = weekAppts.length;
+
+  if (!patients.length) {
+    list.innerHTML = `<div class="empty"><div class="empty-icon">🦷</div><div class="empty-text">Sin pacientes.<br>Envía foto de carpeta clínica al bot.</div></div>`;
+    return;
+  }
+  list.innerHTML = patients.map((p, i) => `
+    <div class="patient-item" onclick="openPatient(${i})">
+      <div class="patient-avatar">${(p.nombre||'?')[0].toUpperCase()}</div>
+      <div class="patient-info">
+        <div class="patient-name">${p.nombre}</div>
+        <div class="patient-meta">Exp: ${p.exp} · ${p.especialidad||'—'} · ${p.edad ? p.edad+' años' : '—'}</div>
+      </div>
+      <svg class="patient-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+  `).join('');
+}
+
+function openPatient(idx) {
+  const p = patients[idx];
+  if (tg && tg.showPopup) {
+    tg.showPopup({
+      title: p.nombre,
+      message: `Exp: ${p.exp}\nEdad: ${p.edad||'—'} · Sexo: ${p.sexo||'—'}\nEspecialidad: ${p.especialidad||'—'}\nTel: ${p.telefono||'Sin registro'}`,
+      buttons: [
+        { id:'odonto', type:'default', text:'Odontograma' },
+        { id:'wa',     type:'default', text:'WhatsApp' },
+        { id:'close',  type:'cancel',  text:'Cerrar' },
+      ]
+    }, (id) => {
+      if (id === 'odonto') { selectedPatientIdx = idx; document.querySelectorAll('.nav-btn')[1].click(); }
+      if (id === 'wa' && p.telefono) window.open(`https://wa.me/52${p.telefono}`);
+    });
+  } else {
+    alert(`${p.nombre}\nExp: ${p.exp}\n${p.especialidad||''}`);
+  }
+}
+
+// ── Odontogram ────────────────────────────────────────────────────────────────
+const upperTeeth = [18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
+const lowerTeeth = [48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
+const tempTeeth  = [55,54,53,52,51,61,62,63,64,65];
+
+function renderOdonto() {
+  const sel = document.getElementById('patient-selector');
+  if (!patients.length) {
+    sel.innerHTML = `<div style="color:var(--text2);font-size:13px;padding:8px">Sin pacientes registrados</div>`;
+  } else {
+    sel.innerHTML = patients.map((p, i) => `
+      <button onclick="selectOdontoPatient(${i})" style="flex-shrink:0;padding:7px 14px;border-radius:999px;border:1.5px solid ${i===selectedPatientIdx?'var(--accent2)':'var(--border)'};background:${i===selectedPatientIdx?'rgba(124,106,247,.15)':'none'};color:${i===selectedPatientIdx?'var(--accent2)':'var(--text2)'};font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap">
+        ${p.nombre.split(' ')[0]}
+      </button>
+    `).join('');
+  }
+  const p = patients[selectedPatientIdx];
+  document.getElementById('odonto-patient-badge').textContent = p ? p.nombre.split(' ').slice(0,2).join(' ') : '—';
+  renderTeethRow('upper-row', upperTeeth);
+  renderTeethRow('lower-row', lowerTeeth);
+  renderTeethRow('temp-row',  tempTeeth);
+}
+
+function selectOdontoPatient(idx) { selectedPatientIdx = idx; renderOdonto(); }
+
+function renderTeethRow(rowId, teeth) {
+  const row = document.getElementById(rowId);
+  const patKey = 'p' + (patients[selectedPatientIdx]?.id || 0);
+  row.innerHTML = teeth.map(num => {
+    const state = odontogram[patKey]?.[num] || '';
+    return `<div class="tooth" onclick="openToothModal(${num})">
+      <div class="tooth-body ${state}" data-tooth="${num}"></div>
+      <div class="tooth-num">${num}</div>
+    </div>`;
+  }).join('');
+}
+
+function openToothModal(toothId) {
+  selectedToothId = toothId;
+  // Animate tapped tooth
+  document.querySelectorAll(`[data-tooth="${toothId}"]`).forEach(el => {
+    el.classList.remove('tapping');
+    void el.offsetWidth;
+    el.classList.add('tapping');
+    el.addEventListener('animationend', () => el.classList.remove('tapping'), { once: true });
+  });
+  document.getElementById('modal-tooth-title').textContent = `Diente #${toothId}`;
+  document.getElementById('tooth-modal').classList.add('open');
+}
+
+function setTooth(state) {
+  if (!selectedToothId) return;
+  const patKey = 'p' + (patients[selectedPatientIdx]?.id || 0);
+  if (!odontogram[patKey]) odontogram[patKey] = {};
+  odontogram[patKey][selectedToothId] = state;
+  saveAll();
+  closeModal();
+  renderOdonto();
+}
+
+function closeModal() { document.getElementById('tooth-modal').classList.remove('open'); }
+
+function resetOdonto() {
+  const patKey = 'p' + (patients[selectedPatientIdx]?.id || 0);
+  const doReset = () => { odontogram[patKey] = {}; saveAll(); renderOdonto(); };
+  if (tg && tg.showConfirm) tg.showConfirm('¿Limpiar el odontograma de este paciente?', ok => { if (ok) doReset(); });
+  else if (confirm('¿Limpiar?')) doReset();
+}
+
+// ── Calendar ──────────────────────────────────────────────────────────────────
+let calDate = new Date();
+let selectedDay = new Date().toISOString().split('T')[0];
+const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const DAYS   = ['D','L','M','X','J','V','S'];
+
+function changeMonth(dir) { calDate.setMonth(calDate.getMonth() + dir); renderCalendar(); }
+
+function renderCalendar() {
+  const y = calDate.getFullYear(), m = calDate.getMonth();
+  document.getElementById('cal-month-label').textContent = `${MONTHS[m]} ${y}`;
+  const grid = document.getElementById('cal-grid');
+  let html = DAYS.map(d => `<div class="cal-day-label">${d}</div>`).join('');
+  const first = new Date(y, m, 1).getDay();
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const prevDays = new Date(y, m, 0).getDate();
+  const today = new Date().toISOString().split('T')[0];
+  for (let i = first-1; i >= 0; i--) html += `<div class="cal-day other-month">${prevDays-i}</div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday    = ds === today;
+    const isSelected = ds === selectedDay;
+    const hasAppt    = appointments.some(a => a.fecha === ds);
+    html += `<div class="cal-day ${isToday?'today':''} ${isSelected?'selected':''} ${hasAppt?'has-appt':''}" onclick="selectDay('${ds}')">${d}</div>`;
+  }
+  const total = first + daysInMonth;
+  const rem = total % 7 === 0 ? 0 : 7 - (total % 7);
+  for (let d = 1; d <= rem; d++) html += `<div class="cal-day other-month">${d}</div>`;
+  grid.innerHTML = html;
+  renderDayAppointments();
+}
+
+function selectDay(ds) { selectedDay = ds; renderCalendar(); }
+
+function renderDayAppointments() {
+  const label = document.getElementById('cal-day-label');
+  const container = document.getElementById('appt-list-container');
+  const today = new Date().toISOString().split('T')[0];
+  label.textContent = selectedDay === today
+    ? 'Hoy'
+    : new Date(selectedDay + 'T12:00:00').toLocaleDateString('es-MX', { weekday:'long', day:'numeric', month:'long' });
+  const dayAppts = appointments.filter(a => a.fecha === selectedDay);
+  if (!dayAppts.length) {
+    container.innerHTML = `<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Sin citas para este día.</div></div>`;
+    return;
+  }
+  container.innerHTML = `<div class="appt-list">${dayAppts.map(a => `
+    <div class="appt-item">
+      <div class="appt-dot"></div>
+      <div class="appt-info">
+        <div class="appt-name">${a.paciente}</div>
+        <div class="appt-note">${a.nota||'Sin nota'} · Exp: ${a.exp||a.expediente||'—'}</div>
+      </div>
+      <div class="appt-time">${a.hora||'—'}</div>
+    </div>
+  `).join('')}</div>`;
+}
+
+// ── Dose Calculator ───────────────────────────────────────────────────────────
+const DRUGS = [
+  { key:'lidocaina',   label:'Lidocaína',   cat:'Anestésico', dosis:4.4,  max:300, carpule:36,
+    presentacion:'36 mg/carpule · 1.8 mL', intervalo:'Única/procedimiento',
+    mecanismo:'Bloqueo reversible de canales de Na⁺ voltaje-dependientes, impidiendo la despolarización neuronal.',
+    clasificacion:'Amida · Categoría B embarazo',
+    indicaciones:['Anestesia infiltrativa','Bloqueo troncular','Procedimientos de rutina','Exodoncias'],
+    observaciones:'Anestésico de referencia. Con vasoconstrictor (epi 1:80,000–1:100,000) dura 60-90 min. Sin VC: 15-30 min.',
+    contraindicaciones:['Alergia a amidas','Bradicardia severa','Bloqueo AV 2°-3°','Porfiria'],
+    precauciones:'Precaución en ICC, hepatopatía severa, epilepsia. Toxicidad: SNC (convulsiones) y CV.' },
+  { key:'articaina',   label:'Articaína',   cat:'Anestésico', dosis:7.0,  max:500, carpule:72,
+    presentacion:'72 mg/carpule · 1.8 mL', intervalo:'Única/procedimiento',
+    mecanismo:'Bloqueo de canales Na⁺. Único con anillo tiofeno: mayor liposolubilidad y difusión tisular.',
+    clasificacion:'Amida + tiofen · Categoría C embarazo',
+    indicaciones:['Tejidos inflamados','Anestesia mandibular infiltrativa','Pulpotomías','Cirugías largas'],
+    observaciones:'Mayor difusión que lidocaína. Útil en infecciones activas. Con epi 1:100,000 o 1:200,000.',
+    contraindicaciones:['Alergia a amidas','Methemoglobinemia','Deficiencia G6PD','<4 años'],
+    precauciones:'Riesgo levemente mayor de parestesia persistente (nervio lingual e inferior).' },
+  { key:'mepivacaina', label:'Mepivacaína', cat:'Anestésico', dosis:4.4,  max:300, carpule:54,
+    presentacion:'54 mg/carpule · 1.8 mL', intervalo:'Única/procedimiento',
+    mecanismo:'Bloqueo de canales Na⁺. Efecto vasoconstrictor intrínseco leve — se puede usar sin epi.',
+    clasificacion:'Amida · Categoría C embarazo',
+    indicaciones:['Contraindicación a vasoconstrictores','HTA severa','Procedimientos cortos','Arritmias'],
+    observaciones:'Al 3% sin VC: 20-40 min pulpar, 2-3h tejidos blandos. Al 2% con levonordefrina similar a lido+epi.',
+    contraindicaciones:['Alergia a amidas','Gestación (evitar 1°-3° trim)','Insuf. hepática grave'],
+    precauciones:'Al 3%, más mg/carpule. Calcular bien la dosis total.' },
+  { key:'amoxicilina', label:'Amoxicilina', cat:'Antibiótico', dosis:25,   max:500, carpule:null,
+    presentacion:'500 mg/cápsula c/8h × 7 días', intervalo:'c/8h × 7 días',
+    mecanismo:'Inhibe síntesis de pared bacteriana uniéndose a PBPs, impidiendo transpeptidación del peptidoglicano.',
+    clasificacion:'β-lactámico aminopenicilina · Categoría B embarazo',
+    indicaciones:['Infecciones odontogénicas','Periodontitis aguda','Profilaxis endocarditis','Celulitis facial'],
+    observaciones:'1ª línea en infecciones odontogénicas. En abscesos graves combinar con metronidazol 500 mg c/8h.',
+    contraindicaciones:['Alergia a penicilinas','Mononucleosis infecciosa','Leucemia linfocítica'],
+    precauciones:'Suspender si hay rash. Puede reducir eficacia de anticonceptivos orales.' },
+  { key:'ibuprofeno',  label:'Ibuprofeno',  cat:'AINE',       dosis:10,   max:400, carpule:null,
+    presentacion:'400 mg/tableta c/8h', intervalo:'c/6-8h · máx 5 días',
+    mecanismo:'Inhibición no selectiva de COX-1 y COX-2 → ↓ síntesis de prostaglandinas y tromboxanos.',
+    clasificacion:'AINE no selectivo · Categoría B/D embarazo',
+    indicaciones:['Dolor postoperatorio','Inflamación postexodoncia','Trismo','Pulpitis reversible'],
+    observaciones:'Mejor AINE para dolor dental. Combinado con paracetamol 500mg supera a opioides postop. Tomar con alimentos.',
+    contraindicaciones:['Úlcera péptica activa','Insuf. renal crónica','Embarazo ≥28 sem','Alergia a AINEs','ICC'],
+    precauciones:'Riesgo CV aumentado con uso prolongado. Interacción con warfarina.' },
+  { key:'paracetamol', label:'Paracetamol', cat:'Analgésico',  dosis:15,   max:1000, carpule:null,
+    presentacion:'500-1000 mg c/6-8h', intervalo:'c/6-8h · máx 4 g/día',
+    mecanismo:'Inhibición central de COX, modulación de receptores cannabinoides y sistema serotoninérgico espinal.',
+    clasificacion:'Analgésico-antipirético · Categoría B (seguro en embarazo)',
+    indicaciones:['Dolor leve-moderado','Embarazo (1ª línea)','Contraindicación a AINEs','Combinación con ibuprofeno'],
+    observaciones:'Seguro en embarazo y lactancia. Sin efecto antiinflamatorio significativo. Potencia al ibuprofeno sin sumar toxicidades.',
+    contraindicaciones:['Hepatopatía severa Child-Pugh C','Alcoholismo activo','Deficiencia G6PD severa'],
+    precauciones:'Máx 4 g/día adultos sanos, 2 g/día con hepatopatía. Presente en muchos medicamentos combinados — no duplicar.' },
+  { key:'ketorolaco',  label:'Ketorolaco',  cat:'AINE',       dosis:0.5,  max:30,  carpule:null,
+    presentacion:'30 mg/ampolleta', intervalo:'c/6h · máx 5 días',
+    mecanismo:'Inhibición potente y no selectiva de COX-1 y COX-2. Efecto analgésico comparable a opioides leves.',
+    clasificacion:'AINE no selectivo · Categoría C embarazo',
+    indicaciones:['Dolor postquirúrgico intenso','Exodoncias complejas','Cirugía de 3° molares','Dolor agudo severo'],
+    observaciones:'AINE más potente disponible. Parenteral (IM/IV) para dolor severo postop. No usar >5 días por riesgo GI.',
+    contraindicaciones:['Úlcera péptica','Insuf. renal','Embarazo','Anticoagulantes','Menores de 17 años'],
+    precauciones:'Alto riesgo GI. Siempre con protector gástrico. No combinar con otros AINEs.' },
+  { key:'dexametasona',label:'Dexametasona',cat:'Corticoide',  dosis:0.15, max:8,   carpule:null,
+    presentacion:'8 mg/2 mL · dosis única', intervalo:'Dosis única preoperatoria',
+    mecanismo:'Inhibe fosfolipasa A2 → ↓ síntesis de AA → ↓ prostaglandinas y leucotrienos. Potencia 25× mayor que cortisol.',
+    clasificacion:'Glucocorticoide sintético · Categoría C embarazo',
+    indicaciones:['Edema postquirúrgico','Trismo agudo','Reacción alérgica','Cirugías de 3° molares impactados'],
+    observaciones:'IM 30-60 min antes de cirugía o IV transoperatorio. Reduce significativamente edema y trismo. Efecto 36-54h.',
+    contraindicaciones:['Infección activa no controlada','DM tipo 1 descompensada','Úlcera péptica activa','Varicela activa'],
+    precauciones:'Una dosis única raramente da efectos sistémicos. En DM puede elevar glucosa 24-48h.' },
+  { key:'clindamicina', label:'Clindamicina',cat:'Antibiótico', dosis:10,   max:300, carpule:null,
+    presentacion:'300 mg/cápsula c/8h × 7 días', intervalo:'c/8h × 7 días',
+    mecanismo:'Se une a subunidad 50S del ribosoma bacteriano inhibiendo síntesis proteica.',
+    clasificacion:'Lincosamida · Categoría B embarazo',
+    indicaciones:['Alergia a penicilinas','Anaerobios','Infecciones graves cabeza/cuello','Profilaxis endocarditis'],
+    observaciones:'Excelente cobertura para anaerobios (Fusobacterium, Prevotella, Porphyromonas). Buena penetración ósea.',
+    contraindicaciones:['Colitis pseudomembranosa previa','Antecedente de C. difficile','Enteritis regional'],
+    precauciones:'Riesgo real de colitis por C. difficile. Advertir al paciente de diarrea severa/sanguinolenta → suspender.' },
+];
+
+let currentWeight = 65;
+let activeDrugIdx = 0;
+
+function renderDose() {
+  const tabs = document.getElementById('drug-tabs');
+  tabs.innerHTML = DRUGS.map((d, i) => `
+    <button class="drug-tab ${i===activeDrugIdx?'active':''}" onclick="selectDrug(${i})">${d.label}</button>
+  `).join('');
+  updateDose();
+}
+
+function selectDrug(idx) { activeDrugIdx = idx; renderDose(); }
+
+function onSliderChange(val) {
+  currentWeight = parseFloat(val);
+  document.getElementById('weight-val').textContent = currentWeight + ' kg';
+  document.getElementById('weight-val').style.color = 'var(--accent)';
+  updateDose();
+}
+
+function setManualWeight() {
+  const input = document.getElementById('weight-manual');
+  const val = parseFloat(input.value);
+  if (!val || val < 1 || val > 300) {
+    input.style.borderColor = 'rgba(255,107,107,.5)';
+    setTimeout(() => input.style.borderColor = '', 1200);
+    return;
+  }
+  currentWeight = val;
+  const sliderVal = Math.min(Math.max(Math.round(val), 5), 150);
+  document.getElementById('weight-slider').value = sliderVal;
+  document.getElementById('weight-val').textContent = currentWeight + ' kg';
+  document.getElementById('weight-val').style.color = val > 150 ? 'var(--accent4)' : 'var(--accent)';
+  input.value = '';
+  input.blur();
+  updateDose();
+}
+
+document.getElementById('weight-manual').addEventListener('keydown', e => { if (e.key === 'Enter') setManualWeight(); });
+
+function updateDose() {
+  const drug = DRUGS[activeDrugIdx];
+  const calculated = Math.round(drug.dosis * currentWeight * 10) / 10;
+  const final = Math.min(calculated, drug.max);
+  const exceeded = calculated > drug.max;
+
+  document.getElementById('dose-main').textContent = final;
+  document.getElementById('dose-unit').textContent = 'mg · ' + drug.label;
+  document.getElementById('dose-result').classList.toggle('warning', exceeded);
+
+  let details = `
+    <div class="dose-detail-item">
+      <div class="dose-detail-label">Dosis/kg</div>
+      <div class="dose-detail-val">${drug.dosis} mg/kg</div>
+    </div>
+    <div class="dose-detail-item">
+      <div class="dose-detail-label">Dosis máx.</div>
+      <div class="dose-detail-val">${drug.max} mg</div>
+    </div>
+    <div class="dose-detail-item">
+      <div class="dose-detail-label">Intervalo</div>
+      <div class="dose-detail-val">${drug.intervalo}</div>
+    </div>
+    <div class="dose-detail-item">
+      <div class="dose-detail-label">Presentación</div>
+      <div class="dose-detail-val" style="font-size:11px">${drug.presentacion}</div>
+    </div>
+  `;
+  document.getElementById('dose-details').innerHTML = details;
+
+  const warn = document.getElementById('dose-warning');
+  if (exceeded) {
+    warn.style.display = 'block';
+    warn.textContent = `⚠️ Calculado: ${calculated} mg > máximo. Se aplica dosis máxima de ${drug.max} mg.`;
+  } else {
+    warn.style.display = 'none';
+  }
+
+  // Carpules
+  const carpuleSection = document.getElementById('carpule-section');
+  if (drug.carpule) {
+    carpuleSection.style.display = 'flex';
+    const numCarpules = final / drug.carpule;
+    const full  = Math.floor(numCarpules);
+    const frac  = numCarpules - full;
+    document.getElementById('carpule-num').textContent = Math.round(numCarpules * 10) / 10;
+    let vis = '';
+    for (let i = 0; i < full; i++) vis += '<div class="carpule-icon full"></div>';
+    if (frac >= 0.1) vis += '<div class="carpule-icon half"></div>';
+    document.getElementById('carpules-visual').innerHTML = vis;
+  } else {
+    carpuleSection.style.display = 'none';
+  }
+
+  // Info tabs
+  document.getElementById('inf-mec').textContent  = drug.mecanismo;
+  document.getElementById('inf-class').textContent = drug.clasificacion;
+  document.getElementById('inf-ind').innerHTML     = drug.indicaciones.map(i => `<span class="tag tag-g">${i}</span>`).join('');
+  document.getElementById('inf-obs').textContent   = drug.observaciones;
+  document.getElementById('inf-ci').innerHTML      = drug.contraindicaciones.map(c => `<span class="tag tag-r">${c}</span>`).join('');
+  document.getElementById('inf-prec').textContent  = drug.precauciones;
+}
+
+function switchInfoTab(name, btn) {
+  document.querySelectorAll('.info-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.info-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('pane-' + name).classList.add('active');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.getElementById('tooth-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+(async () => {
+  await loadBotData();
+  renderPatients();
+  renderCalendar();
+})();
+</script>
+</body>
+</html>
