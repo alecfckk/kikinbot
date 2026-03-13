@@ -43,80 +43,80 @@ user_reminders:  dict[int, list[str]]  = {}
 patient_records: dict[int, list[dict]] = {}
 appointments:    dict[int, list[dict]] = {}
 
-# ── PostgreSQL ────────────────────────────────────────────────────────────────
+# ── PostgreSQL (asyncpg) ──────────────────────────────────────────────────────
 import asyncpg
-import asyncpg.extras
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
+_db_pool = None
 
-def get_conn():
-    return asyncpg.connect(DATABASE_URL, sslmode="require")
-
-def init_db():
-    """Crea las tablas si no existen."""
+async def get_pool():
+    global _db_pool
     if not DATABASE_URL:
-        logger.warning("⚠ DATABASE_URL no definida — usando memoria (datos no persistentes)")
-        return
-    try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS patients (
-                        uid     BIGINT NOT NULL,
-                        data    JSONB  NOT NULL,
-                        PRIMARY KEY (uid)
-                    );
-                    CREATE TABLE IF NOT EXISTS appointments (
-                        uid     BIGINT NOT NULL,
-                        data    JSONB  NOT NULL,
-                        PRIMARY KEY (uid)
-                    );
-                    CREATE TABLE IF NOT EXISTS reminders (
-                        uid     BIGINT NOT NULL,
-                        data    JSONB  NOT NULL,
-                        PRIMARY KEY (uid)
-                    );
-                """)
-        logger.info("✅ Base de datos inicializada")
-    except Exception as e:
-        logger.error(f"init_db error: {e}")
+        return None
+    if _db_pool is None:
+        url = DATABASE_URL.replace("postgres://", "postgresql://")
+        _db_pool = await asyncpg.create_pool(url, ssl="require", min_size=1, max_size=5)
+    return _db_pool
 
-def load_data():
-    """Carga todos los datos de PostgreSQL a memoria."""
+async def init_db():
+    pool = await get_pool()
+    if not pool:
+        logger.warning("DATABASE_URL no definida - datos solo en memoria")
+        return
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS patients (
+                uid  BIGINT PRIMARY KEY,
+                data JSONB  NOT NULL DEFAULT '[]'
+            );
+            CREATE TABLE IF NOT EXISTS appointments (
+                uid  BIGINT PRIMARY KEY,
+                data JSONB  NOT NULL DEFAULT '[]'
+            );
+            CREATE TABLE IF NOT EXISTS reminders (
+                uid  BIGINT PRIMARY KEY,
+                data JSONB  NOT NULL DEFAULT '[]'
+            );
+        """)
+    logger.info("OK Base de datos inicializada")
+
+async def load_data():
     global user_reminders, patient_records, appointments
-    if not DATABASE_URL:
+    pool = await get_pool()
+    if not pool:
         return
-    try:
-        with get_conn() as conn:
-            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute("SELECT uid, data FROM patients")
-                patient_records = {row["uid"]: row["data"] for row in cur.fetchall()}
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT uid, data FROM patients")
+        patient_records = {r["uid"]: json.loads(r["data"]) for r in rows}
+        rows = await conn.fetch("SELECT uid, data FROM appointments")
+        appointments = {r["uid"]: json.loads(r["data"]) for r in rows}
+        rows = await conn.fetch("SELECT uid, data FROM reminders")
+        user_reminders = {r["uid"]: json.loads(r["data"]) for r in rows}
+    logger.info(f"OK Datos cargados: {len(patient_records)} usuarios")
 
-                cur.execute("SELECT uid, data FROM appointments")
-                appointments = {row["uid"]: row["data"] for row in cur.fetchall()}
-
-                cur.execute("SELECT uid, data FROM reminders")
-                user_reminders = {row["uid"]: row["data"] for row in cur.fetchall()}
-
-        logger.info(f"✅ Datos cargados: {len(patient_records)} usuarios con pacientes")
-    except Exception as e:
-        logger.error(f"load_data error: {e}")
-
-def _upsert(table: str, uid: int, data):
-    """Guarda o actualiza un registro para un usuario."""
-    if not DATABASE_URL:
+async def _upsert(table: str, uid: int, data):
+    pool = await get_pool()
+    if not pool:
         return
-    try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(f"""
-                    INSERT INTO {table} (uid, data) VALUES (%s, %s)
-                    ON CONFLICT (uid) DO UPDATE SET data = EXCLUDED.data
-                """, (uid, json.dumps(data, ensure_ascii=False)))
-    except Exception as e:
-        logger.error(f"_upsert {table} uid={uid} error: {e}")
+    async with pool.acquire() as conn:
+        await conn.execute(f"""
+            INSERT INTO {table} (uid, data) VALUES ($1, $2::jsonb)
+            ON CONFLICT (uid) DO UPDATE SET data = EXCLUDED.data
+        """, uid, json.dumps(data, ensure_ascii=False))
 
+async def save_patients(uid: int):
+    await _upsert("patients", uid, patient_records.get(uid, []))
 
+async def save_appointments(uid: int):
+    await _upsert("appointments", uid, appointments.get(uid, []))
+
+async def save_reminders(uid: int):
+    await _upsert("reminders", uid, user_reminders.get(uid, []))
+
+async def save_data():
+    for uid in list(patient_records): await save_patients(uid)
+    for uid in list(appointments):    await save_appointments(uid)
+    for uid in list(user_reminders):  await save_reminders(uid)
 
 # ── Fármacos odontológicos con dosis ─────────────────────────────────────────
 FARMACOS = {
