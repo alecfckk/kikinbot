@@ -213,24 +213,20 @@ body {
   margin-bottom: 10px;
 }
 .teeth-row {
-  display: grid;
-  grid-template-columns: repeat(16, 1fr);
-  gap: 2px;
-}
-.teeth-row-temp {
-  grid-template-columns: repeat(10, 1fr);
+  display: flex;
+  justify-content: center;
+  gap: 4px;
 }
 .tooth {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   cursor: pointer;
 }
 .tooth-body {
-  width: 100%;
-  aspect-ratio: 1 / 1.1;
-  border-radius: 4px 4px 7px 7px;
+  width: 28px; height: 32px;
+  border-radius: 6px 6px 10px 10px;
   background: var(--tooth-default);
   border: 1.5px solid var(--border);
   transition: all .15s;
@@ -239,16 +235,23 @@ body {
   align-items: center;
   justify-content: center;
 }
-.tooth-body:active { transform: scale(.92); }
-.tooth-body.healthy { background: rgba(0,229,160,.2); border-color: var(--tooth-healthy); }
-.tooth-body.caries { background: rgba(255,107,107,.2); border-color: var(--tooth-caries); }
-.tooth-body.treated { background: rgba(124,106,247,.2); border-color: var(--tooth-treated); }
+.tooth-body:active { transform: scale(.88); }
+.tooth-body.healthy { background: rgba(0,229,160,.2); border-color: var(--tooth-healthy); box-shadow: 0 0 6px rgba(0,229,160,.3); }
+.tooth-body.caries { background: rgba(255,107,107,.2); border-color: var(--tooth-caries); box-shadow: 0 0 6px rgba(255,107,107,.3); }
+.tooth-body.treated { background: rgba(124,106,247,.2); border-color: var(--tooth-treated); box-shadow: 0 0 6px rgba(124,106,247,.3); }
 .tooth-body.missing { background: var(--tooth-missing); border-color: var(--tooth-missing); opacity: .4; }
+
+@keyframes toothPop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(.75); }
+  70%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+.tooth-body.tapping { animation: toothPop .25s ease forwards; }
 .tooth-num {
   font-family: 'Space Mono', monospace;
-  font-size: 6px;
+  font-size: 8px;
   color: var(--text2);
-  line-height: 1;
 }
 
 /* TOOTH MODAL */
@@ -530,7 +533,11 @@ input[type=range]::-webkit-slider-thumb {
 <div class="page active" id="page-patients">
   <div class="page-header">
     <div class="page-title">kik<span>in</span></div>
-    <div class="badge badge-green" id="patients-count">0 px</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="badge badge-green" id="patients-count">0 px</div>
+      <button onclick="syncData()" style="background:rgba(0,229,160,.1);border:1px solid rgba(0,229,160,.25);border-radius:10px;padding:6px 12px;color:var(--accent);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer" title="Sincronizar con bot">🔄 Sync</button>
+      <button onclick="openSettings()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:6px 10px;color:var(--text2);font-size:14px;cursor:pointer" title="Configurar API">⚙️</button>
+    </div>
   </div>
 
   <div class="stats-row">
@@ -597,7 +604,7 @@ input[type=range]::-webkit-slider-thumb {
   <!-- Temporal -->
   <div class="odonto-arch">
     <div class="arch-label">Temporal / Deciduo</div>
-    <div class="teeth-row teeth-row-temp" id="temp-row"></div>
+    <div class="teeth-row" id="temp-row"></div>
   </div>
 
   <button class="btn btn-secondary" style="margin-top:8px" onclick="resetOdonto()">🔄 Limpiar odontograma</button>
@@ -717,23 +724,58 @@ if (tg) {
   tg.setBackgroundColor('#0a0a0f');
 }
 
-// ── Abrir calculadora avanzada ────────────────────────────────────────────────
-function openDosisApp() {
-  const url = 'https://alecfckk.github.io/kikinbot/dosis.html';
-  if (tg && tg.openLink) {
-    tg.openLink(url);
-  } else {
-    window.open(url, '_blank');
-  }
-}
-
 // ── Storage helpers ───────────────────────────────────────────────────────────
 const store = {
   get: k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
   set: (k,v) => localStorage.setItem(k, JSON.stringify(v)),
 };
 
-// ── Demo data (will be replaced by real bot data) ─────────────────────────────
+function saveAll() {
+  store.set('kikin_patients', patients);
+  store.set('kikin_appointments', appointments);
+  store.set('kikin_odonto', odontogram);
+}
+
+// ── Bot API — cargar datos reales ─────────────────────────────────────────────
+const BOT_API = store.get('kikin_bot_api') || '';
+
+async function loadBotData() {
+  if (!BOT_API) return false;
+  try {
+    const initData = tg?.initData || '';
+    const uid      = tg?.initDataUnsafe?.user?.id || '';
+    const params   = initData
+      ? `init_data=${encodeURIComponent(initData)}`
+      : `uid=${uid}`;
+    const res  = await fetch(`${BOT_API}/api/data?${params}`);
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (data.patients?.length)     { patients     = data.patients;     store.set('kikin_patients', patients); }
+    if (data.appointments?.length) { appointments = data.appointments; store.set('kikin_appointments', appointments); }
+    showToast('✅ Sincronizado con el bot');
+    return true;
+  } catch(e) {
+    console.warn('Bot API no disponible, usando datos locales:', e);
+    return false;
+  }
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1c1c28;border:1px solid #2a2a3d;color:#f0f0ff;padding:10px 18px;border-radius:12px;font-size:13px;z-index:999;transition:opacity .3s;white-space:nowrap;pointer-events:none';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._hide);
+  t._hide = setTimeout(() => t.style.opacity = '0', 2500);
+}
+
+// ── Datos locales (fallback) ──────────────────────────────────────────────────
 let patients = store.get('kikin_patients') || [
   { id:1, nombre:'Manuel de Jesús Guzmán', exp:'CO/423/25', edad:'70', sexo:'M', especialidad:'Exodoncia', telefono:'9611234567', fecha:'13/03/2026' },
   { id:2, nombre:'Natalia Rivera Osorio', exp:'C0L-LIB 2125', edad:'—', sexo:'F', especialidad:'Historia Clínica', telefono:'', fecha:'13/03/2026' },
@@ -748,8 +790,7 @@ let odontogram = store.get('kikin_odonto') || {};
 let selectedPatientIdx = 0;
 let selectedToothId = null;
 
-// ── Nav ───────────────────────────────────────────────────────────────────────
-function showPage(name, btn) {
+
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
@@ -758,6 +799,42 @@ function showPage(name, btn) {
   if (name === 'odonto') renderOdonto();
   if (name === 'patients') renderPatients();
   if (name === 'dose') renderDose();
+}
+
+// ── Sync & Settings ───────────────────────────────────────────────────────────
+async function syncData() {
+  showToast('🔄 Sincronizando...');
+  const ok = await loadBotData();
+  if (ok) { renderPatients(); renderCalendar(); }
+  else showToast('⚠️ No se pudo conectar. Configura la URL del bot en ⚙️');
+}
+
+function openSettings() {
+  const current = store.get('kikin_bot_api') || '';
+  if (tg) {
+    tg.showPopup({
+      title: '⚙️ Configurar Bot API',
+      message: `URL actual: "${current || 'no configurada'}"\n\nEscribe la URL de Railway/Render donde corre tu bot.\nEjemplo: https://odontobot.up.railway.app`,
+      buttons: [
+        { id: 'set', type: 'default', text: 'Cambiar URL' },
+        { id: 'clear', type: 'destructive', text: 'Limpiar' },
+        { id: 'cancel', type: 'cancel', text: 'Cerrar' },
+      ]
+    }, (btnId) => {
+      if (btnId === 'clear') { store.set('kikin_bot_api', ''); showToast('URL eliminada'); }
+      if (btnId === 'set') promptApiUrl();
+    });
+  } else {
+    promptApiUrl();
+  }
+}
+
+function promptApiUrl() {
+  const url = prompt('URL del bot (Railway/Render):\nEj: https://odontobot.up.railway.app', store.get('kikin_bot_api') || '');
+  if (url !== null) {
+    store.set('kikin_bot_api', url.trim());
+    showToast(url ? '✅ URL guardada' : 'URL eliminada');
+  }
 }
 
 // ── PATIENTS ─────────────────────────────────────────────────────────────────
@@ -855,6 +932,16 @@ function renderTeethRow(rowId, teeth) {
 
 function openToothModal(toothId) {
   selectedToothId = toothId;
+  // Animate the tapped tooth
+  const toothEls = document.querySelectorAll('.tooth-body');
+  toothEls.forEach(el => {
+    if (el.title == toothId) {
+      el.classList.remove('tapping');
+      void el.offsetWidth;
+      el.classList.add('tapping');
+      el.addEventListener('animationend', () => el.classList.remove('tapping'), { once: true });
+    }
+  });
   document.getElementById('modal-tooth-title').textContent = `Diente #${toothId}`;
   document.getElementById('tooth-modal').classList.add('open');
 }
@@ -1041,8 +1128,11 @@ function updateDose() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-renderPatients();
-renderCalendar();
+(async () => {
+  await loadBotData();  // intenta cargar datos reales; si falla usa localStorage
+  renderPatients();
+  renderCalendar();
+})();
 
 // Close modal on overlay click
 document.getElementById('tooth-modal').addEventListener('click', function(e) {
