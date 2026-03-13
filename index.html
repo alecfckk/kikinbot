@@ -1160,22 +1160,70 @@ function showPage(name, btn) {
 }
 
 // ── Sync with bot ─────────────────────────────────────────────────────────────
+// La URL del bot se pasa como ?api=https://... cuando el bot abre la Mini App
+const _botApiUrl = (() => {
+  const p = new URLSearchParams(window.location.search).get('api');
+  if (p) { store.set('kikin_bot_api', p); return p; }
+  return store.get('kikin_bot_api') || '';
+})();
+
+function _mapPatients(raw) {
+  return (raw || []).map((p, i) => ({
+    id: p.id || (i + 1),
+    nombre:       p.nombre            || 'Sin nombre',
+    exp:          p.numero_expediente || p.exp || 'N/D',
+    edad:         p.edad              || '—',
+    sexo:         p.sexo              || '—',
+    especialidad: p.especialidad      || '—',
+    telefono:     p.telefono          || '',
+    fecha:        p.fecha_apertura    || p._registrado || p.fecha || '—',
+  }));
+}
+
+function _mapAppointments(raw) {
+  return (raw || []).map(a => {
+    // fecha del bot puede ser texto: "Lunes 17 marzo 15:30" o ISO "2026-03-17"
+    let fechaISO = '', hora = a.hora || '—';
+    const iso = (a.fecha || '').match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) {
+      fechaISO = iso[0];
+      hora = a.hora || a.fecha.replace(iso[0], '').trim() || '—';
+    }
+    return {
+      paciente:   a.paciente   || '—',
+      exp:        a.expediente || a.exp || '—',
+      fecha:      fechaISO,
+      hora:       hora,
+      nota:       a.nota       || '',
+      telefono:   a.telefono   || '',
+    };
+  });
+}
+
 async function syncData() {
-  const url = store.get('kikin_bot_api');
-  if (!url) {
-    showToast('⚙ Configura URL del bot primero');
+  if (!_botApiUrl) {
+    const url = prompt('🔗 URL de tu bot desplegado (ej: https://mi-bot.railway.app):');
+    if (!url) return;
+    store.set('kikin_bot_api', url);
+    location.reload();
     return;
   }
+  const initData = tg?.initData || '';
   try {
     showToast('↺ Sincronizando…');
-    const r = await fetch(url + '/miniapp/data');
+    const qs = initData
+      ? '?init_data=' + encodeURIComponent(initData)
+      : '';                         // solo en dev sin initData
+    const r = await fetch(_botApiUrl + '/api/data' + qs);
+    if (!r.ok) { showToast('✗ Error ' + r.status); return; }
     const d = await r.json();
-    if (d.patients)     { patients = d.patients; store.set('kikin_patients', patients); }
-    if (d.appointments) { appointments = d.appointments; store.set('kikin_appointments', appointments); }
+    if (d.patients)     { patients     = _mapPatients(d.patients);         store.set('kikin_patients', patients); }
+    if (d.appointments) { appointments = _mapAppointments(d.appointments); store.set('kikin_appointments', appointments); }
     renderPatients();
+    renderCalendar();
     showToast('✓ Datos actualizados');
-  } catch {
-    showToast('✗ Error de conexión');
+  } catch (e) {
+    showToast('✗ Sin conexión al bot');
   }
 }
 
@@ -1557,6 +1605,8 @@ function switchTab(name, btn) {
 renderPatients();
 renderCalendar();
 initDose();
+// Auto-sync si hay initData (abierto desde Telegram) y URL del bot configurada
+if (tg?.initData && _botApiUrl) syncData();
 </script>
 </body>
 </html>
